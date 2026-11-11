@@ -1,0 +1,784 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Steering Light With Light</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: optical-bench instrument — control rail on the left, live x–z field + far-field scope on the right, notes below. */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #16202b;
+  --muted: #5a6877;
+  --line: #d3dae2;
+  --accent: #0f6fd6;     /* predicted / theory */
+  --hot: #d9480f;        /* measured */
+  --good: #1b8a4c;
+  --warn: #b7791f;
+  --scope: #0b1118;      /* instrument screen, same in both themes */
+  --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151c; --panel: #161e27; --ink: #e3e9ef; --muted: #93a2b2; --line: #2a3542;
+    --accent: #5aa9ff; --hot: #ff8a4c; --good: #4fd08a; --warn: #f0b252; --scope: #070b10;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #161e27; --ink: #e3e9ef; --muted: #93a2b2; --line: #2a3542;
+  --accent: #5aa9ff; --hot: #ff8a4c; --good: #4fd08a; --warn: #f0b252; --scope: #070b10;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 20px; }
+header h1 { font-family: var(--f-display); font-size: clamp(1.6rem, 3.2vw, 2.3rem); margin: 0 0 6px; text-wrap: balance; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 72ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+
+.app { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
+.panel h2, .card h2 { font-family: var(--f-display); font-size: 0.95rem; margin: 0; letter-spacing: 0.01em; }
+.group { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.group-title { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.ctl { display: grid; gap: 3px; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ctl label .v { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }
+.ctl small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select, button { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+select { width: 100%; }
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { font-size: 12px; padding: 5px 8px; }
+.presets button.on { border-color: var(--accent); color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+
+.viz { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.cardhead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; padding: 4px 9px; font-size: 12px; }
+.seg button.on { background: var(--accent); color: var(--panel); }
+canvas { display: block; width: 100%; height: auto; border-radius: 6px; background: var(--scope); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.eq { font-family: var(--f-mono); font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; line-height: 1.7; white-space: nowrap; }
+.eq .big { font-size: 14px; color: var(--ink); }
+.eq .sub { color: var(--muted); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+th { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td.num { font-family: var(--f-mono); }
+.tablewrap { overflow-x: auto; }
+.pill { display: inline-block; font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid; }
+.pill.ok { color: var(--good); } .pill.bad { color: var(--hot); } .pill.mid { color: var(--warn); }
+.verdict { font-size: 14px; }
+
+.notes { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px clamp(14px, 3vw, 32px); display: grid; gap: 4px; }
+.notes h2 { font-family: var(--f-display); font-size: 1.25rem; margin: 18px 0 4px; text-wrap: balance; }
+.notes h2:first-child { margin-top: 0; }
+.notes p, .notes li { max-width: 74ch; }
+.notes .eq { white-space: normal; max-width: 74ch; }
+.notes ol.src li { margin-bottom: 6px; font-size: 14px; }
+.notes a { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Feynman Lectures Vol. I, Ch. 31 · extended</div>
+    <h1>Steering light with a second wave</h1>
+    <p>An incident beam plus a wave you add. The left rail sets both. The field map shows what you would see in the plane of propagation, the scope below it shows where the energy goes far away, and the readout compares the measured exit angle θ with the law that predicts it.</p>
+  </header>
+
+  <div class="app">
+    <aside class="panel" id="controls" aria-label="Simulation controls">
+      <div class="ctl">
+        <h2>Presets</h2>
+        <div class="presets" id="presets"></div>
+      </div>
+      <div class="ctl">
+        <label for="mode">How the second wave is made</label>
+        <select id="mode">
+          <option value="cross">Free beam crossing the incident beam (vacuum)</option>
+          <option value="sheet">Phase-locked sheet of emitters at z = 0</option>
+        </select>
+      </div>
+      <div class="group" id="g-inc">
+        <div class="group-title">Incident light</div>
+      </div>
+      <div class="group" id="g-add">
+        <div class="group-title">Added wave</div>
+      </div>
+      <div class="group" id="g-sheet">
+        <div class="group-title">Emitter sheet</div>
+      </div>
+      <div class="group" id="g-grat">
+        <div class="group-title">Grating that sets the period Λ</div>
+      </div>
+    </aside>
+
+    <section class="viz">
+      <div class="card">
+        <div class="cardhead">
+          <h2>Near field, x–z plane (24 µm × 20 µm)</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div class="seg" id="seg-show" role="group" aria-label="Which wave to draw">
+              <button data-v="total" class="on">Total</button><button data-v="incident">Incident</button><button data-v="added">Added</button>
+            </div>
+            <div class="seg" id="seg-qty" role="group" aria-label="Quantity">
+              <button data-v="field" class="on">Field E(t)</button><button data-v="int">⟨Intensity⟩</button>
+            </div>
+            <button id="play" aria-pressed="true">Pause</button>
+          </div>
+        </div>
+        <canvas id="field" width="600" height="500" aria-label="Field map"></canvas>
+        <div class="legend">
+          <span><span class="sw" style="border-color:#ffffff"></span>incident direction θᵢ</span>
+          <span><span class="sw" style="border-color:#5aa9ff;border-top-style:dashed"></span>predicted exit directions</span>
+          <span><span class="sw" style="border-color:#ff8a4c"></span>measured strongest exit beam</span>
+          <span>Light travels upward. θ is measured from the vertical (the sheet normal), positive to the right.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardhead"><h2>Far field: where the power goes (forward half-space)</h2><span class="legend" id="powerline"></span></div>
+        <canvas id="far" width="900" height="300" aria-label="Far-field angular intensity"></canvas>
+        <div class="legend">
+          <span><span class="sw" style="border-color:var(--hot)"></span>total, time-averaged</span>
+          <span><span class="sw" style="border-color:var(--muted);border-top-style:dashed"></span>incident beam alone</span>
+          <span><span class="sw" style="border-color:var(--accent);border-top-style:dashed"></span>angles predicted by the governing law</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Readout</h2>
+        <div class="verdict" id="verdict"></div>
+        <div class="readout">
+          <div style="display:grid;gap:8px;min-width:0">
+            <div class="group-title">Governing relationship, with your numbers</div>
+            <div class="eq" id="eq"></div>
+          </div>
+          <div style="display:grid;gap:8px;min-width:0">
+            <div class="group-title">Predicted vs measured exit angles</div>
+            <div class="tablewrap"><table id="tbl"></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <article class="notes">
+    <h2>1. What Feynman actually showed</h2>
+    <p>In Vol. I, Ch. 31 Feynman explains the refractive index without ever saying light "slows down" inside glass. The incident wave E<sub>s</sub> shakes the electrons in a thin plate. Each electron is a driven, damped oscillator, so it oscillates at the same frequency ω as the light, with a fixed phase lag. A whole plane of such oscillators radiates a plane wave (Ch. 30, §30-7), and that wave is 90° behind the drive because the field of a sheet of charges is proportional to their velocity, not their displacement. Downstream you see the sum:</p>
+    <div class="eq">E<sub>after</sub> = E<sub>s</sub> + E<sub>plate</sub> ≈ E<sub>s</sub> · (1 + i·k(n−1)Δz) ≈ E<sub>s</sub> · e<sup>i k (n−1) Δz</sup></div>
+    <p>A small wave added in quadrature looks exactly like a phase delay, which is what a slower wave would produce. Strictly this is refraction, not diffraction, but both come from the same arithmetic: you superpose the incident wave with secondary waves of the same frequency and a definite phase, and you look at what the sum does. The Ewald–Oseen extinction theorem takes this to the limit. Inside a thick medium the dipoles' waves cancel the incident wave completely and replace it with a new wave that travels at c/n.</p>
+
+    <h2>2. Can a wave you send in from outside do the same job?</h2>
+    <p><strong>Not by simply crossing it with another beam in empty space.</strong> Maxwell's equations in vacuum are linear, so two waves superpose and then pass through each other unchanged. Where they overlap you get interference fringes with period λ/|sin θ₁ − sin θ₂|. That redistributes energy locally but does not change either beam's direction. Far away you still find two beams, each at its original angle. Use the <em>Free beam crossing</em> mode to see this: the scope shows two separate peaks, and the incident peak never moves, whatever the amplitude or phase of the second beam. The only true light-on-light scattering in vacuum comes from quantum electrodynamics (Euler–Heisenberg). It has been observed only with the enormous fields of ultra-relativistic heavy-ion collisions, and is negligible for any laser.</p>
+    <p><strong>Yes, if the added wave is built to be what the material would have radiated.</strong> The plate is just a sheet of sources locked to the incident light. Replace the electrons with any sources you control (antennas, a phased array, nano-resonators, a spatial light modulator) and the downstream field is the same. The sheet mode does exactly this. Each emitter at x<sub>j</sub> radiates</p>
+    <div class="eq">c(x<sub>j</sub>) = E<sub>inc</sub>(x<sub>j</sub>) · [ A·e<sup>i(Φ(x<sub>j</sub>) + φ₀)</sup> − κ ]</div>
+    <p>The −κ term is the extinction wave that removes the original beam. The A term is the new wave. Φ(x) is the phase profile you write across the sheet. Four conditions have to hold, and each has a slider:</p>
+    <ul>
+      <li><strong>Same frequency, phase-locked.</strong> If the added wave is off by Δf, the cross term between the two waves averages to zero over a time 1/Δf. There is then no lasting cancellation and no steering, only two independent beams. In practice the added wave has to be derived from the incident light itself, which is what a material or a passive metasurface does automatically. Try the <em>Frequency mismatch</em> slider.</li>
+      <li><strong>A phase gradient along the sheet.</strong> A uniform added wave only delays the beam (Feynman's plate). To turn it, the phase must change across the sheet. That is the governing law below.</li>
+      <li><strong>Sources on a fine enough pitch.</strong> If the emitters are more than about λ/2 apart, extra beams appear (grating lobes) at sin θ<sub>m</sub> = sin θ<sub>t</sub> + mλ/d.</li>
+      <li><strong>Cancellation costs energy.</strong> To remove the old beam you must radiate an equal and opposite wave. The sources absorb the incident power and re-emit it in the new direction. If κ = 0, the old beam is still there and you have only added a beam. A sheet of simple point sources also radiates backward, which shows up as reflection. Huygens sheets, which pair electric and magnetic responses, make the emission one-sided. Toggle the "one-sided" option to compare.</li>
+    </ul>
+
+    <h2>3. The one relationship behind all of it</h2>
+    <p>Whatever imposes the extra phase, the transmitted wave has to match the phase of the total field along the sheet. Its tangential wavenumber is the incident one plus the gradient you wrote, plus any multiple of the grating vector:</p>
+    <div class="eq">k·sin θ<sub>t</sub> = k·sin θ<sub>i</sub> + dΦ/dx + m·2π/Λ &nbsp;&nbsp;⇔&nbsp;&nbsp; sin θ<sub>t</sub> = sin θ<sub>i</sub> + (λ/2π)·dΦ/dx + m·λ/Λ</div>
+    <ul>
+      <li><strong>Linear ramp</strong> (metasurface or phased array), Φ = (Δφ/d)·x: sin θ<sub>t</sub> = sin θ<sub>i</sub> + λΔφ/(2πd). This is the generalized Snell's law of Yu et al. (2011) and the phased-array scan equation.</li>
+      <li><strong>Periodic modulation</strong>, Φ = M·sin(2πx/Λ): the grating equation sin θ<sub>m</sub> = sin θ<sub>i</sub> + mλ/Λ. For a thin phase grating (Raman–Nath regime) the power in order m is J<sub>m</sub>(M)². A thick grating sends almost everything into one order when the Bragg condition sin θ<sub>B</sub> = λ/(2Λ) holds.</li>
+      <li><strong>Uniform</strong>, Φ = const: θ<sub>t</sub> = θ<sub>i</sub>, phase delay δ = arg(1 − κ + A e<sup>iφ₀</sup>). This is equivalent to a slab with (n−1)Δz = δλ/2π, Feynman's case.</li>
+      <li>A beam no longer exists when |sin θ<sub>t</sub>| &gt; 1. That order becomes evanescent and stays bound to the sheet.</li>
+    </ul>
+
+    <h2>4. Projecting a wave that steers light: the versions that exist</h2>
+    <p>In practice you steer light with another wave by letting that wave write a grating into a medium, and the medium then does the steering.</p>
+    <ul>
+      <li><strong>Acousto-optic deflector.</strong> A sound wave of frequency f and speed v writes a moving index grating with Λ = v/f. Light leaves at sin θ = sin θ<sub>i</sub> ± λf/v, and the deflection angle is tuned electronically through f. This is a standard laser-scanning component. In the simulation, choose <em>Grating source → Sound wave</em>.</li>
+      <li><strong>Light-written grating</strong> (photorefractive crystals, Kerr media, dynamic holography, four-wave mixing). Two pump beams at ±α interfere. Their fringes, with Λ = λ<sub>p</sub>/(2 sin α), change the index, and a probe beam diffracts off the fringes. Here one light wave really does redirect another, with a nonlinear medium as the go-between. In the simulation, choose <em>Grating source → Two pump beams</em>.</li>
+      <li><strong>Active wavefront synthesis</strong> (optical phased arrays, SLM holography, metasurfaces) is the phase-locked sheet of section 2 built from engineered sources.</li>
+    </ul>
+
+    <h2>5. How the simulation computes it</h2>
+    <p>2-D scalar wave optics at one frequency (time dependence e<sup>−iωt</sup>), with lengths in µm. The incident wave is an exact plane wave. Each emitter is a line source with the exact 2-D Green's function (i/4)·H₀<sup>(1)</sup>(kr), evaluated in its far-field form. Its strength s = −2i·k<sub>z</sub>·d·c is the value for which a dense sheet radiates exactly the designed field c (one-sided sheets add the cardioid factor (1+cos θ)/2). The far field is the array factor Σ s<sub>j</sub> e<sup>−ikx<sub>j</sub> sin θ</sup> plus the incident beam seen through the same aperture W, normalized so that the incident beam alone peaks at 1. "Measured" angles are the peaks of that computed far field, found independently of the formula, so the agreement in the readout is a real check. Simplifications: scalar field (no polarization), emitters respond as prescribed (no mutual coupling), and the near-field Hankel form is clipped within about 0.1λ of each emitter.</p>
+
+    <h2>Sources</h2>
+    <ol class="src">
+      <li>R. P. Feynman, R. B. Leighton, M. Sands, <em>The Feynman Lectures on Physics</em>, Vol. I, Ch. 31 "The Origin of the Refractive Index" (§31-1, 31-2). <a href="https://www.feynmanlectures.caltech.edu/I_31.html">feynmanlectures.caltech.edu/I_31.html</a></li>
+      <li>Same, Vol. I, Ch. 30 "Diffraction": §30-2 the diffraction grating (grating equation), §30-7 the field of a plane of oscillating charges. <a href="https://www.feynmanlectures.caltech.edu/I_30.html">feynmanlectures.caltech.edu/I_30.html</a></li>
+      <li>M. Born, E. Wolf, <em>Principles of Optics</em>, 7th ed., Cambridge Univ. Press, Ch. 2 (§2.4, the Ewald–Oseen extinction theorem).</li>
+      <li>N. Yu, P. Genevet, M. A. Kats, F. Aieta, J.-P. Tetienne, F. Capasso, Z. Gaburro, "Light propagation with phase discontinuities: generalized laws of reflection and refraction," <em>Science</em> 334, 333–337 (2011). <a href="https://doi.org/10.1126/science.1210713">doi:10.1126/science.1210713</a></li>
+      <li>C. Pfeiffer, A. Grbic, "Metamaterial Huygens' surfaces: tailoring wave fronts with reflectionless sheets," <em>Phys. Rev. Lett.</em> 110, 197401 (2013). <a href="https://doi.org/10.1103/PhysRevLett.110.197401">doi:10.1103/PhysRevLett.110.197401</a></li>
+      <li>R. J. Mailloux, <em>Phased Array Antenna Handbook</em>, Artech House: scan equation sin θ = λΔφ/(2πd) and grating lobes.</li>
+      <li>B. E. A. Saleh, M. C. Teich, <em>Fundamentals of Photonics</em>, Wiley, chapter on acousto-optics (Bragg condition, Λ = v/f, deflection angle).</li>
+      <li>C. V. Raman, N. S. Nagendra Nath, "The diffraction of light by high frequency sound waves," <em>Proc. Indian Acad. Sci. A</em> 2, 406 (1935): Bessel-function order intensities J<sub>m</sub>(M)².</li>
+      <li>H. Kogelnik, "Coupled wave theory for thick hologram gratings," <em>Bell Syst. Tech. J.</em> 48, 2909 (1969): Bragg selectivity of thick gratings.</li>
+      <li>P. Yeh, <em>Introduction to Photorefractive Nonlinear Optics</em>, Wiley (1993): light-induced gratings and two-wave mixing.</li>
+      <li>W. Heisenberg, H. Euler, "Folgerungen aus der Diracschen Theorie des Positrons," <em>Z. Phys.</em> 98, 714 (1936); ATLAS Collaboration, "Evidence for light-by-light scattering in heavy-ion collisions with the ATLAS detector at the LHC," <em>Nature Physics</em> 13, 852 (2017). <a href="https://doi.org/10.1038/nphys4208">doi:10.1038/nphys4208</a></li>
+    </ol>
+  </article>
+</div>
+
+<script>
+(() => {
+"use strict";
+const PI = Math.PI, rad = d => d * PI / 180, deg = r => r * 180 / PI;
+const $ = id => document.getElementById(id);
+
+// ---------- state ----------
+const S = {
+  mode: "sheet", lam: 633, thi: 20, ai: 1,
+  A: 1, phi0: 0, kappa: 1, df: 0,
+  profile: "linear", dphi: 30, pitch: 150, W: 16, huygens: true,
+  M: 1.4, gsrc: "manual", Lam: 2.0, fac: 2.0, vac: 4200, lamp: 532, alpha: 10,
+  thc: -30,
+  show: "total", qty: "field", playing: true
+};
+
+// ---------- controls ----------
+const CTL = [
+  { g: "g-inc", id: "lam", label: "Wavelength λ", min: 400, max: 1600, step: 1, fmt: v => v + " nm", help: "Vacuum wavelength of the incident light." },
+  { g: "g-inc", id: "thi", label: "Incidence angle θᵢ", min: -60, max: 60, step: 0.5, fmt: v => v.toFixed(1) + "°" },
+  { g: "g-inc", id: "ai", label: "Incident amplitude", min: 0, max: 2, step: 0.05, fmt: v => v.toFixed(2) },
+
+  { g: "g-add", id: "thc", label: "Second beam angle θ꜀", min: -80, max: 80, step: 0.5, fmt: v => v.toFixed(1) + "°", modes: ["cross"] },
+  { g: "g-add", id: "A", label: "Amplitude A (× incident)", min: 0, max: 2, step: 0.01, fmt: v => v.toFixed(2) },
+  { g: "g-add", id: "phi0", label: "Phase offset φ₀", min: -180, max: 180, step: 1, fmt: v => v + "°", help: "Phase of the added wave relative to the incident wave at the sheet." },
+  { g: "g-add", id: "kappa", label: "Cancel incident κ", min: 0, max: 1, step: 0.01, fmt: v => v.toFixed(2), modes: ["sheet"], help: "1 means the sheet also radiates −E_inc (the extinction wave)." },
+  { g: "g-add", id: "df", label: "Frequency mismatch Δf", min: 0, max: 2, step: 0.05, fmt: v => v === 0 ? "0 (locked)" : v.toFixed(2) + " beats/s", help: "Shown slowed down. A real 1 MHz offset washes the effect out within about 1 µs." },
+
+  { g: "g-sheet", id: "profile", type: "select", label: "Phase profile Φ(x) across the sheet", modes: ["sheet"],
+    opts: [["linear", "Linear ramp: metasurface / phased array"], ["sinus", "Sinusoidal: grating written by a wave"], ["uniform", "Uniform: Feynman's plate"]] },
+  { g: "g-sheet", id: "dphi", label: "Phase step per emitter Δφ", min: -180, max: 180, step: 1, fmt: v => v + "°", modes: ["sheet"], profiles: ["linear"] },
+  { g: "g-sheet", id: "M", label: "Modulation depth M", min: 0, max: 4, step: 0.05, fmt: v => v.toFixed(2) + " rad", modes: ["sheet"], profiles: ["sinus"] },
+  { g: "g-sheet", id: "pitch", label: "Emitter pitch d", min: 80, max: 1500, step: 5, fmt: v => v + " nm", modes: ["sheet"] },
+  { g: "g-sheet", id: "W", label: "Sheet / aperture width W", min: 4, max: 22, step: 0.5, fmt: v => v.toFixed(1) + " µm" },
+  { g: "g-sheet", id: "huygens", type: "check", label: "One-sided (Huygens) emitters, no backward wave", modes: ["sheet"] },
+
+  { g: "g-grat", id: "gsrc", type: "select", label: "What writes the grating", modes: ["sheet"], profiles: ["sinus"],
+    opts: [["manual", "Set Λ directly"], ["acoustic", "Sound wave (acousto-optic): Λ = v/f"], ["optical", "Two pump beams (light-written): Λ = λₚ/(2 sin α)"]] },
+  { g: "g-grat", id: "Lam", label: "Grating period Λ", min: 0.5, max: 10, step: 0.05, fmt: v => v.toFixed(2) + " µm", modes: ["sheet"], profiles: ["sinus"], gsrc: ["manual"] },
+  { g: "g-grat", id: "fac", label: "Acoustic frequency f", min: 0.2, max: 6, step: 0.05, fmt: v => v.toFixed(2) + " GHz", modes: ["sheet"], profiles: ["sinus"], gsrc: ["acoustic"] },
+  { g: "g-grat", id: "vac", label: "Sound speed v", min: 600, max: 6500, step: 10, fmt: v => v + " m/s", modes: ["sheet"], profiles: ["sinus"], gsrc: ["acoustic"], help: "TeO₂ longitudinal ≈ 4200 m/s; fused silica ≈ 5960 m/s." },
+  { g: "g-grat", id: "lamp", label: "Pump wavelength λₚ", min: 350, max: 1100, step: 1, fmt: v => v + " nm", modes: ["sheet"], profiles: ["sinus"], gsrc: ["optical"] },
+  { g: "g-grat", id: "alpha", label: "Pump half-angle α", min: 2, max: 60, step: 0.5, fmt: v => v.toFixed(1) + "°", modes: ["sheet"], profiles: ["sinus"], gsrc: ["optical"] },
+];
+
+const PRESETS = [
+  { name: "Feynman plate", set: { mode: "sheet", profile: "uniform", A: 0.2, phi0: 90, kappa: 0, df: 0, thi: 0, pitch: 150 } },
+  { name: "Two beams in vacuum", set: { mode: "cross", thc: -30, A: 1, phi0: 0, df: 0, thi: 20 } },
+  { name: "Locked sheet steers beam", set: { mode: "sheet", profile: "linear", dphi: 30, pitch: 150, A: 1, kappa: 1, phi0: 0, df: 0, thi: 20 } },
+  { name: "Added, no cancel", set: { mode: "sheet", profile: "linear", dphi: 30, pitch: 150, A: 1, kappa: 0, phi0: 0, df: 0, thi: 20 } },
+  { name: "Coherence lost", set: { mode: "sheet", profile: "linear", dphi: 30, pitch: 150, A: 1, kappa: 1, phi0: 0, df: 0.6, thi: 20 } },
+  { name: "Grating lobes", set: { mode: "sheet", profile: "linear", dphi: 60, pitch: 900, A: 1, kappa: 1, phi0: 0, df: 0, thi: 10 } },
+  { name: "Sound wave (AOM)", set: { mode: "sheet", profile: "sinus", gsrc: "acoustic", fac: 2, vac: 4200, M: 1.4, A: 1, kappa: 1, phi0: 0, df: 0, thi: 0, pitch: 150 } },
+  { name: "Light-written grating", set: { mode: "sheet", profile: "sinus", gsrc: "optical", lamp: 532, alpha: 10, M: 1.8, A: 1, kappa: 1, phi0: 0, df: 0, thi: 5, pitch: 150 } },
+];
+
+function buildControls() {
+  for (const c of CTL) {
+    const wrap = document.createElement("div");
+    wrap.className = "ctl"; wrap.dataset.ctl = c.id;
+    if (c.type === "select") {
+      wrap.innerHTML = `<label for="c-${c.id}">${c.label}</label><select id="c-${c.id}">${c.opts.map(o => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select>`;
+    } else if (c.type === "check") {
+      wrap.innerHTML = `<label class="check" for="c-${c.id}" style="justify-content:flex-start"><input type="checkbox" id="c-${c.id}"> ${c.label}</label>`;
+    } else {
+      wrap.innerHTML = `<label for="c-${c.id}"><span>${c.label}</span><span class="v" id="v-${c.id}"></span></label><input type="range" id="c-${c.id}" min="${c.min}" max="${c.max}" step="${c.step}">` + (c.help ? `<small>${c.help}</small>` : "");
+    }
+    $(c.g).appendChild(wrap);
+    const el = $("c-" + c.id);
+    const ev = c.type === "range" || !c.type ? "input" : "change";
+    el.addEventListener(ev, () => {
+      S[c.id] = c.type === "select" ? el.value : c.type === "check" ? el.checked : parseFloat(el.value);
+      clearPreset(); sync(); dirty = true;
+    });
+  }
+  $("mode").addEventListener("change", e => { S.mode = e.target.value; clearPreset(); sync(); dirty = true; });
+  const pr = $("presets");
+  PRESETS.forEach((p, i) => {
+    const b = document.createElement("button"); b.textContent = p.name; b.id = "preset-" + i;
+    b.addEventListener("click", () => { Object.assign(S, p.set); sync(); dirty = true; clearPreset(); b.classList.add("on"); });
+    pr.appendChild(b);
+  });
+  for (const [segId, key] of [["seg-show", "show"], ["seg-qty", "qty"]]) {
+    $(segId).querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      S[key] = b.dataset.v;
+      $(segId).querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+      redrawStatic = true;
+    }));
+  }
+  $("play").addEventListener("click", () => {
+    S.playing = !S.playing; $("play").textContent = S.playing ? "Pause" : "Play";
+    $("play").setAttribute("aria-pressed", String(S.playing));
+  });
+}
+function clearPreset() { document.querySelectorAll("#presets button").forEach(b => b.classList.remove("on")); }
+
+function sync() {
+  $("mode").value = S.mode;
+  for (const c of CTL) {
+    const el = $("c-" + c.id);
+    if (c.type === "select") el.value = S[c.id];
+    else if (c.type === "check") el.checked = !!S[c.id];
+    else { el.value = S[c.id]; $("v-" + c.id).textContent = c.fmt(S[c.id]); }
+    let vis = true;
+    if (c.modes && !c.modes.includes(S.mode)) vis = false;
+    if (c.profiles && !c.profiles.includes(S.profile)) vis = false;
+    if (c.gsrc && !c.gsrc.includes(S.gsrc)) vis = false;
+    el.closest(".ctl").hidden = !vis;
+  }
+  $("g-sheet").querySelector(".group-title").textContent = S.mode === "sheet" ? "Emitter sheet" : "Observation aperture";
+  $("g-grat").hidden = !(S.mode === "sheet" && S.profile === "sinus");
+}
+
+// ---------- physics ----------
+const NX = 300, NZ = 250, X0 = -12, X1 = 12, Z0 = -6, Z1 = 14;
+const DX = (X1 - X0) / NX, DZ = (Z1 - Z0) / NZ;
+const EiR = new Float32Array(NX * NZ), EiI = new Float32Array(NX * NZ);
+const EcR = new Float32Array(NX * NZ), EcI = new Float32Array(NX * NZ);
+let EM = { N: 0, x: [], sR: [], sI: [], d: 0 };
+let FAR = null, PRED = null;
+
+function kOf() { return 2 * PI / (S.lam / 1000); }
+function gratingPeriod() {
+  if (S.gsrc === "acoustic") return S.vac / (S.fac * 1000);
+  if (S.gsrc === "optical") return (S.lamp / 1000) / (2 * Math.sin(rad(S.alpha)));
+  return S.Lam;
+}
+function profilePhase(x) {
+  if (S.profile === "linear") return rad(S.dphi) / (S.pitch / 1000) * x;
+  if (S.profile === "sinus") return S.M * Math.sin(2 * PI * x / gratingPeriod());
+  return 0;
+}
+
+function buildEmitters() {
+  const k = kOf(), sI = Math.sin(rad(S.thi)), cI = Math.cos(rad(S.thi));
+  const d = S.pitch / 1000;
+  let N = Math.min(400, Math.floor(S.W / d) + 1);
+  const x0 = -(N - 1) * d / 2;
+  let kzA = k * cI;
+  if (S.profile === "linear") {
+    const G = 2 * PI / d;
+    let q = k * sI + rad(S.dphi) / d;
+    q -= G * Math.round(q / G);
+    kzA = Math.max(Math.sqrt(Math.max(k * k - q * q, 0)), 0.15 * k);
+  }
+  const kzK = k * cI;
+  const hA = S.huygens ? 2 / (1 + kzA / k) : 1, hK = S.huygens ? 2 / (1 + kzK / k) : 1;
+  const x = new Float64Array(N), sR = new Float64Array(N), sIm = new Float64Array(N);
+  for (let j = 0; j < N; j++) {
+    const xj = x0 + j * d; x[j] = xj;
+    const pinc = k * xj * sI;
+    const ph = pinc + profilePhase(xj) + rad(S.phi0);
+    const aR = S.ai * S.A * Math.cos(ph), aI = S.ai * S.A * Math.sin(ph);
+    const cR = -S.kappa * S.ai * Math.cos(pinc), cIm = -S.kappa * S.ai * Math.sin(pinc);
+    // w = (kz/k)·c per part, with Huygens normalisation
+    const wR = (kzA * hA * aR + kzK * hK * cR) / k, wI = (kzA * hA * aI + kzK * hK * cIm) / k;
+    // s = -2i k d w
+    sR[j] = 2 * k * d * wI; sIm[j] = -2 * k * d * wR;
+  }
+  EM = { N, x, sR, sI: sIm, d };
+}
+
+function computeField() {
+  const k = kOf(), sI = Math.sin(rad(S.thi)), cI = Math.cos(rad(S.thi));
+  const pref = 0.25 * Math.sqrt(2 / PI), pc = pref * Math.cos(PI / 4), ps = pref * Math.sin(PI / 4);
+  const N = EM.N, xs = EM.x;
+  const spR = new Float64Array(N), spI = new Float64Array(N);
+  for (let j = 0; j < N; j++) { spR[j] = EM.sR[j] * pc - EM.sI[j] * ps; spI[j] = EM.sR[j] * ps + EM.sI[j] * pc; }
+  const sC = Math.sin(rad(S.thc)), cC = Math.cos(rad(S.thc));
+  const huy = S.huygens, krMin = 0.6;
+  for (let iz = 0; iz < NZ; iz++) {
+    const z = Z1 - (iz + 0.5) * DZ, z2 = z * z;
+    for (let ix = 0; ix < NX; ix++) {
+      const xx = X0 + (ix + 0.5) * DX, p = iz * NX + ix;
+      const ph = k * (xx * sI + z * cI);
+      EiR[p] = S.ai * Math.cos(ph); EiI[p] = S.ai * Math.sin(ph);
+      let re = 0, im = 0;
+      if (S.mode === "sheet") {
+        for (let j = 0; j < N; j++) {
+          const ddx = xx - xs[j], r = Math.sqrt(ddx * ddx + z2);
+          let kr = k * r; if (kr < krMin) kr = krMin;
+          let a = 1 / Math.sqrt(kr);
+          if (huy) a *= 0.5 * (1 + (r > 1e-9 ? z / r : 0));
+          const c = Math.cos(kr), s = Math.sin(kr);
+          re += a * (spR[j] * c - spI[j] * s);
+          im += a * (spR[j] * s + spI[j] * c);
+        }
+      } else {
+        const ph2 = k * (xx * sC + z * cC) + rad(S.phi0);
+        re = S.A * S.ai * Math.cos(ph2); im = S.A * S.ai * Math.sin(ph2);
+      }
+      EcR[p] = re; EcI[p] = im;
+    }
+  }
+}
+
+function sinc(u) { return Math.abs(u) < 1e-8 ? 1 : Math.sin(u) / u; }
+function besselJ(m, x) {
+  const am = Math.abs(m); let sum = 0, term;
+  for (let s = 0; s < 40; s++) {
+    term = Math.pow(-1, s) * Math.pow(x / 2, 2 * s + am) / (fact(s) * fact(s + am));
+    sum += term;
+  }
+  return (m < 0 && am % 2) ? -sum : sum;
+}
+const FC = [1]; function fact(n) { while (FC.length <= n) FC.push(FC[FC.length - 1] * FC.length); return FC[n]; }
+
+function computeFar() {
+  const k = kOf(), sI = Math.sin(rad(S.thi)), cI = Math.cos(rad(S.thi)), W = S.W;
+  const sC = Math.sin(rad(S.thc));
+  const NT = 1441, th = new Float64Array(NT), I = new Float64Array(NT), I0 = new Float64Array(NT), Ia = new Float64Array(NT);
+  const norm = Math.pow(Math.max(S.ai, 1e-6) * W * cI, 2);
+  const locked = S.df === 0;
+  for (let t = 0; t < NT; t++) {
+    const thd = -90 + 180 * t / (NT - 1), s = Math.sin(rad(thd)), c = Math.cos(rad(thd));
+    th[t] = thd;
+    const Fi = S.ai * c * W * sinc(k * W * (sI - s) / 2);
+    let FR = 0, FI = 0;
+    if (S.mode === "sheet") {
+      const ang = S.huygens ? 0.5 * (1 + c) : 1;
+      for (let j = 0; j < EM.N; j++) {
+        // s_j · i/(2k) · ang · e^{-ik x s}
+        const ph = -k * EM.x[j] * s, cp = Math.cos(ph), sp = Math.sin(ph);
+        const gR = -EM.sI[j] / (2 * k), gI = EM.sR[j] / (2 * k);
+        FR += ang * (gR * cp - gI * sp); FI += ang * (gR * sp + gI * cp);
+      }
+    } else {
+      const amp = S.A * S.ai * c * W * sinc(k * W * (sC - s) / 2);
+      FR = amp * Math.cos(rad(S.phi0)); FI = amp * Math.sin(rad(S.phi0));
+    }
+    I0[t] = Fi * Fi / norm;
+    Ia[t] = (FR * FR + FI * FI) / norm;
+    I[t] = locked ? ((Fi + FR) * (Fi + FR) + FI * FI) / norm : I0[t] + Ia[t];
+  }
+  // peaks
+  let gmax = 0; for (let t = 0; t < NT; t++) gmax = Math.max(gmax, I[t]);
+  const peaks = [];
+  for (let t = 1; t < NT - 1; t++) {
+    if (I[t] >= I[t - 1] && I[t] > I[t + 1] && I[t] > 0.08 * gmax && I[t] > 1e-4) {
+      // parabolic refine
+      const a = I[t - 1], b = I[t], c2 = I[t + 1], den = a - 2 * b + c2;
+      const off = den !== 0 ? 0.5 * (a - c2) / den : 0;
+      peaks.push({ th: th[t] + off * (180 / (NT - 1)), I: b });
+    }
+  }
+  peaks.sort((p, q) => q.I - p.I);
+  let P = 0, P0 = 0; for (let t = 0; t < NT; t++) { P += I[t]; P0 += I0[t]; }
+  FAR = { th, I, I0, gmax, peaks: peaks.slice(0, 6), power: P0 > 0 ? P / P0 : NaN };
+}
+
+function predict() {
+  const lam = S.lam / 1000, sI = Math.sin(rad(S.thi)), thi = S.thi;
+  const out = { orders: [], eq: "", verdict: "", status: "ok" };
+  const f = (v, n = 3) => (Math.abs(v) < 1e-12 ? 0 : v).toFixed(n);
+  const locked = S.df === 0;
+  if (S.mode === "cross") {
+    const sC = Math.sin(rad(S.thc)), dS = Math.abs(sI - sC);
+    out.orders.push({ label: "incident beam", th: thi, w: S.ai * S.ai });
+    out.orders.push({ label: "second beam", th: S.thc, w: Math.pow(S.A * S.ai, 2) });
+    const fr = dS > 1e-6 ? lam / dS : Infinity;
+    out.eq =
+      `<div class="sub">Linear superposition in vacuum, ∇²E − (1/c²)∂²E/∂t² = 0:</div>` +
+      `<div class="big">E = E<sub>i</sub>e<sup>ik·r</sup> + A·E<sub>i</sub>e<sup>i(k'·r + φ₀)</sup></div>` +
+      `<div class="sub">Each term propagates unchanged. The far field holds two beams:</div>` +
+      `<div>θ₁ = θᵢ = ${f(thi, 1)}° (unchanged)  ·  θ₂ = θ꜀ = ${f(S.thc, 1)}°</div>` +
+      `<div class="sub">Fringe period where they overlap:</div>` +
+      `<div>Λ<sub>f</sub> = λ / |sin θᵢ − sin θ꜀| = ${f(lam)} / ${f(dS)} = ${isFinite(fr) ? f(fr, 3) + " µm" : "∞"}</div>` +
+      `<div class="sub">If a nonlinear medium recorded these fringes, a probe would leave at</div>` +
+      `<div>sin θ = sin θ<sub>probe</sub> ± λ/Λ<sub>f</sub>  (switch to the sheet mode, sinusoidal profile)</div>`;
+    out.verdict = `<span class="pill bad">no steering</span> In vacuum the second wave only adds fringes. The incident beam still leaves at θᵢ = ${f(thi, 1)}° for any amplitude or phase you choose.`;
+    out.status = "bad";
+    return out;
+  }
+  const d = S.pitch / 1000;
+  if (S.profile === "uniform") {
+    const TR = 1 - S.kappa + S.A * Math.cos(rad(S.phi0)), TI = S.A * Math.sin(rad(S.phi0));
+    const dl = Math.atan2(TI, TR), mag = Math.hypot(TR, TI);
+    const nd = dl / (2 * PI) * lam;
+    out.orders.push({ label: "transmitted (m = 0)", th: thi, w: mag * mag });
+    out.eq =
+      `<div class="sub">Uniform added wave, Feynman Ch. 31:</div>` +
+      `<div class="big">E<sub>after</sub> = E<sub>s</sub>·(1 − κ + A e<sup>iφ₀</sup>) = |T| e<sup>iδ</sup> E<sub>s</sub></div>` +
+      `<div>|T| = ${f(mag)}   δ = ${f(deg(dl), 2)}°</div>` +
+      `<div class="sub">Same as a slab of index n and thickness Δz with</div>` +
+      `<div class="big">(n − 1)·Δz = δλ / 2π = ${f(nd * 1000, 1)} nm</div>` +
+      `<div class="sub">e.g. Δz = 1 µm ⇒ n = ${f(1 + nd, 4)}. Direction unchanged: θₜ = θᵢ = ${f(thi, 1)}°</div>`;
+    out.verdict = locked
+      ? (Math.abs(dl) > 1e-3 ? `<span class="pill mid">phase delay only</span> The added wave in quadrature delays the beam by ${f(deg(dl), 1)}°. This is the "slowing" Feynman describes. A uniform sheet cannot turn the beam.`
+        : `<span class="pill mid">no effect</span> With these settings the added wave does not change the transmitted beam's phase.`)
+      : `<span class="pill bad">not locked</span> With a frequency mismatch the delay averages away, so the beam keeps its original phase on average.`;
+    out.status = locked ? "mid" : "bad";
+    return out;
+  }
+  if (S.profile === "linear") {
+    const g = rad(S.dphi) / d;            // dΦ/dx rad/µm
+    const s0 = sI + lam * g / (2 * PI);
+    for (let m = -4; m <= 4; m++) {
+      const s = s0 + m * lam / d;
+      if (Math.abs(s) <= 1) out.orders.push({ label: m === 0 ? "steered beam (m = 0)" : `grating lobe m = ${m > 0 ? "+" : ""}${m}`, th: deg(Math.asin(s)), w: m === 0 ? S.A * S.A : S.A * S.A * 0.5 });
+    }
+    if (!locked && S.ai > 0) out.orders.push({ label: "incident (not cancelled on average)", th: thi, w: 1 });
+    else if (S.kappa < 1 && S.ai > 0) out.orders.push({ label: "un-cancelled incident", th: thi, w: Math.pow(1 - S.kappa, 2) });
+    let lobes = out.orders.filter(o => o.label.startsWith("grating lobe")).length;
+    if (S.kappa > 0) for (let m = -4; m <= 4; m++) {
+      if (m === 0) continue;
+      const s = sI + m * lam / d;
+      if (Math.abs(s) <= 1) { out.orders.push({ label: `lobe of extinction wave m = ${m > 0 ? "+" : ""}${m}`, th: deg(Math.asin(s)), w: S.kappa * S.kappa * 0.5 }); lobes++; }
+    }
+    const ok0 = Math.abs(s0) <= 1;
+    out.eq =
+      `<div class="sub">Generalized Snell's law / phased-array scan equation:</div>` +
+      `<div class="big">sin θₜ = sin θᵢ + (λ/2π)·dΦ/dx + m·λ/d</div>` +
+      `<div>dΦ/dx = Δφ/d = ${f(rad(S.dphi), 3)} rad / ${f(d, 3)} µm = ${f(g, 3)} rad/µm</div>` +
+      `<div>sin θₜ = ${f(sI)} + (${f(lam)}/2π)·${f(g, 3)} = <b>${f(s0)}</b></div>` +
+      `<div class="big">θₜ = ${ok0 ? f(deg(Math.asin(s0)), 2) + "°" : "none (|sin| > 1, evanescent)"}</div>` +
+      (ok0 ? `<div class="sub">Lossless sheet: power conservation needs A = √(cos θᵢ / cos θₜ) = ${f(Math.sqrt(Math.cos(rad(thi)) / Math.sqrt(1 - s0 * s0)))}</div>` : "") +
+      `<div class="sub">Lobes at m ≠ 0 need |sin θₜ + mλ/d| ≤ 1. Here λ/d = ${f(lam / d)}${lam / d < 1 + Math.abs(s0) ? "" : ", so none propagate"}.</div>`;
+    if (!locked) { out.verdict = `<span class="pill bad">not locked</span> Δf ≠ 0, so the extinction wave does not cancel the incident beam on average and the steered beam is only an extra, independent beam. Phase locking is required.`; out.status = "bad"; }
+    else if (!ok0) { out.verdict = `<span class="pill bad">evanescent</span> The phase gradient asks for |sin θₜ| > 1, so the main order cannot propagate.`; out.status = "bad"; }
+    else if (lobes > 0) { out.verdict = `<span class="pill mid">grating lobes</span> The main beam is steered to ${f(deg(Math.asin(s0)), 2)}°, but the pitch d = ${S.pitch} nm is larger than λ/(1 + |sin θ|), so the discrete emitters also radiate ${lobes} extra beam${lobes > 1 ? "s" : ""}. Reduce d below about λ/2 = ${Math.round(S.lam / 2)} nm.`; out.status = "mid"; }
+    else if (S.kappa >= 0.98 && Math.abs(S.A - 1) < 0.05) { out.verdict = `<span class="pill ok">beam redirected</span> The incident beam is cancelled and replaced. Light enters at ${f(thi, 1)}° and leaves at ${f(deg(Math.asin(s0)), 2)}°.`; out.status = "ok"; }
+    else { out.verdict = `<span class="pill mid">partial</span> A new beam appears at ${f(deg(Math.asin(s0)), 2)}°, but κ = ${f(S.kappa, 2)} leaves part of the original beam at ${f(thi, 1)}°. Set κ = 1 and A = 1 for full redirection.`; out.status = "mid"; }
+    return out;
+  }
+  // sinusoidal
+  const L = gratingPeriod();
+  const src = S.gsrc === "acoustic" ? `Λ = v/f = ${S.vac} m/s / ${f(S.fac, 2)} GHz = ${f(L, 3)} µm`
+    : S.gsrc === "optical" ? `Λ = λₚ/(2 sin α) = ${f(S.lamp / 1000)} / (2·sin ${f(S.alpha, 1)}°) = ${f(L, 3)} µm` : `Λ = ${f(L, 3)} µm`;
+  const rows = [];
+  for (let m = -4; m <= 4; m++) {
+    const s = sI + m * lam / L;
+    let aR = S.A * besselJ(m, S.M) * Math.cos(rad(S.phi0)), aI = S.A * besselJ(m, S.M) * Math.sin(rad(S.phi0));
+    if (m === 0) aR += 1 - S.kappa;
+    const w = aR * aR + aI * aI;
+    if (Math.abs(s) <= 1) { out.orders.push({ label: `order m = ${m > 0 ? "+" : ""}${m}`, th: deg(Math.asin(s)), w }); rows.push([m, w]); }
+  }
+  const s1 = sI + lam / L;
+  out.eq =
+    `<div class="sub">Phase grating Φ = M sin(2πx/Λ), grating equation:</div>` +
+    `<div class="big">sin θₘ = sin θᵢ + m·λ/Λ,   Pₘ ∝ |A Jₘ(M)e^{iφ₀} + (1−κ)δₘ₀|²</div>` +
+    `<div>${src}</div>` +
+    `<div>sin θ₊₁ = ${f(sI)} + ${f(lam)}/${f(L, 3)} = <b>${f(s1)}</b> ⇒ θ₊₁ = ${Math.abs(s1) <= 1 ? f(deg(Math.asin(s1)), 2) + "°" : "evanescent"}</div>` +
+    `<div class="sub">J₀(M)² = ${f(Math.pow(besselJ(0, S.M), 2))}   J₁(M)² = ${f(Math.pow(besselJ(1, S.M), 2))}   (M = 1.84 maximizes J₁²)</div>` +
+    `<div class="sub">Thick-grating (Bragg) incidence: sin θ_B = λ/(2Λ) = ${f(lam / (2 * L))} ⇒ θ_B = ${lam / (2 * L) <= 1 ? f(deg(Math.asin(lam / (2 * L))), 2) + "°" : "—"}</div>`;
+  if (!locked) { out.verdict = `<span class="pill bad">not locked</span> The diffracted orders need the grating to be phase-coherent with the light at the sheet. With Δf ≠ 0 the orders are not cancelled and re-formed in step, so no steady pattern forms.`; out.status = "bad"; }
+  else { out.verdict = `<span class="pill ok">diffracted</span> The wave-written grating splits the beam into orders. The first order leaves at ${Math.abs(s1) <= 1 ? f(deg(Math.asin(s1)), 2) + "°" : "(evanescent)"} and carries ${f(100 * Math.pow(S.A * besselJ(1, S.M), 2), 1)}% of the power.`; out.status = "ok"; }
+  return out;
+}
+
+// ---------- drawing ----------
+const fc = $("field"), fx = fc.getContext("2d");
+const off = document.createElement("canvas"); off.width = NX; off.height = NZ;
+const ox = off.getContext("2d"), img = ox.createImageData(NX, NZ);
+const farC = $("far"), farX = farC.getContext("2d");
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function sizeCanvases() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = fc.clientWidth || 600;
+  fc.width = Math.round(w * dpr); fc.height = Math.round(w * NZ / NX * dpr);
+  const w2 = farC.clientWidth || 900;
+  farC.width = Math.round(w2 * dpr); farC.height = Math.round(Math.max(220, Math.min(320, w2 * 0.36)) * dpr);
+  redrawStatic = true;
+}
+
+function drawField(t) {
+  const w = 2 * PI * 0.6 * t, dw = 2 * PI * S.df * t;
+  const c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(w + dw), s2 = Math.sin(w + dw);
+  const incOn = S.show !== "added" ? 1 : 0, ctlOn = S.show !== "incident" ? 1 : 0;
+  const ref = Math.max(S.ai, S.A * S.ai, 0.3);
+  const data = img.data, locked = S.df === 0;
+  for (let p = 0; p < NX * NZ; p++) {
+    let r, g, b;
+    if (S.qty === "field") {
+      let v = incOn * (EiR[p] * c1 + EiI[p] * s1) + ctlOn * (EcR[p] * c2 + EcI[p] * s2);
+      v = Math.tanh(v / (1.1 * ref));
+      const a = Math.abs(v);
+      if (v >= 0) { r = 10 + a * 245; g = 14 + a * 120; b = 22 + a * 30; }
+      else { r = 10 + a * 40; g = 14 + a * 150; b = 22 + a * 233; }
+    } else {
+      const ar = incOn * EiR[p], ai = incOn * EiI[p], br = ctlOn * EcR[p], bi = ctlOn * EcI[p];
+      let I = locked ? (ar + br) * (ar + br) + (ai + bi) * (ai + bi) : ar * ar + ai * ai + br * br + bi * bi;
+      let u = Math.min(1, Math.pow(I / (2.2 * ref * ref), 0.6));
+      r = 255 * Math.min(1, u * 1.7); g = 255 * Math.max(0, Math.min(1, (u - 0.35) * 1.6)); b = 255 * Math.max(0, Math.min(1, u < 0.4 ? u * 1.4 : (u - 0.75) * 3.5));
+      r = 8 + r * 0.97; g = 10 + g * 0.96; b = 16 + b * 0.94;
+    }
+    const q = p * 4; data[q] = r; data[q + 1] = g; data[q + 2] = b; data[q + 3] = 255;
+  }
+  ox.putImageData(img, 0, 0);
+  fx.imageSmoothingEnabled = true;
+  fx.drawImage(off, 0, 0, fc.width, fc.height);
+  overlay();
+}
+
+function toPx(x, z) { return [(x - X0) / (X1 - X0) * fc.width, (Z1 - z) / (Z1 - Z0) * fc.height]; }
+function arrow(ctx, x0, y0, x1, y1, col, dash, lw) {
+  ctx.save(); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = lw; ctx.setLineDash(dash || []);
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+  const a = Math.atan2(y1 - y0, x1 - x0), h = 5 * lw + 4;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(a - 0.4), y1 - h * Math.sin(a - 0.4)); ctx.lineTo(x1 - h * Math.cos(a + 0.4), y1 - h * Math.sin(a + 0.4)); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function overlay() {
+  const ctx = fx, dpr = fc.width / (fc.clientWidth || fc.width);
+  ctx.save();
+  ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`;
+  // sheet
+  if (S.mode === "sheet") {
+    const [a, y] = toPx(-S.W / 2, 0), [b] = toPx(S.W / 2, 0);
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1.2 * dpr; ctx.setLineDash([3 * dpr, 3 * dpr]);
+    ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(b, y); ctx.stroke(); ctx.setLineDash([]);
+    if (EM.N <= 60) { ctx.fillStyle = "rgba(255,255,255,0.8)"; for (let j = 0; j < EM.N; j++) { const [px, py] = toPx(EM.x[j], 0); ctx.beginPath(); ctx.arc(px, py, 2 * dpr, 0, 2 * PI); ctx.fill(); } }
+    ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillText("emitter sheet z = 0", a + 4 * dpr, y + 14 * dpr);
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    const [a, y] = toPx(-11.5, -5.3); ctx.fillText("vacuum: no material anywhere", a, y);
+  }
+  const L1 = 5.2, L2 = 12;
+  const ti = rad(S.thi);
+  if (S.ai > 0) {
+    const [p0x, p0y] = toPx(-L1 * Math.sin(ti), -L1 * Math.cos(ti)), [p1x, p1y] = toPx(0, 0);
+    arrow(ctx, p0x, p0y, p1x, p1y, "#ffffff", null, 2 * dpr);
+    ctx.fillStyle = "#ffffff"; ctx.fillText(`θᵢ ${S.thi.toFixed(1)}°`, p0x + 6 * dpr, p0y - 4 * dpr);
+  }
+  // predicted
+  const [ox0, oy0] = toPx(0, 0);
+  if (PRED) for (const o of PRED.orders) {
+    if (o.w < 0.01) continue;
+    const t = rad(o.th), [qx, qy] = toPx(L2 * Math.sin(t), L2 * Math.cos(t));
+    arrow(ctx, ox0, oy0, qx, qy, "rgba(90,169,255,0.95)", [6 * dpr, 4 * dpr], 1.6 * dpr);
+  }
+  // measured main
+  if (FAR && FAR.peaks.length) {
+    const t = rad(FAR.peaks[0].th), [qx, qy] = toPx(L2 * 0.85 * Math.sin(t), L2 * 0.85 * Math.cos(t));
+    arrow(ctx, ox0, oy0, qx, qy, "#ff8a4c", null, 2.4 * dpr);
+    ctx.fillStyle = "#ff8a4c";
+    ctx.fillText(`θ ${FAR.peaks[0].th.toFixed(2)}°`, Math.min(qx + 6 * dpr, fc.width - 80 * dpr), Math.max(qy - 4 * dpr, 14 * dpr));
+  }
+  ctx.restore();
+}
+
+function drawFar() {
+  const ctx = farX, W = farC.width, H = farC.height, dpr = W / (farC.clientWidth || W);
+  const ink = css("--ink"), muted = css("--muted"), line = css("--line"), acc = css("--accent"), hot = css("--hot"), scope = css("--panel");
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = scope; ctx.fillRect(0, 0, W, H);
+  const padL = 46 * dpr, padR = 14 * dpr, padT = 14 * dpr, padB = 30 * dpr;
+  const pw = W - padL - padR, ph = H - padT - padB;
+  let ymax = Math.max(1.1, FAR.gmax * 1.12);
+  const X = th => padL + (th + 90) / 180 * pw, Y = v => padT + ph - Math.min(v, ymax) / ymax * ph;
+  ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`;
+  ctx.strokeStyle = line; ctx.lineWidth = 1 * dpr; ctx.fillStyle = muted;
+  for (let a = -90; a <= 90; a += 30) {
+    ctx.beginPath(); ctx.moveTo(X(a), padT); ctx.lineTo(X(a), padT + ph); ctx.stroke();
+    ctx.textAlign = "center"; ctx.fillText(a + "°", X(a), H - 10 * dpr);
+  }
+  const step = ymax > 3 ? 1 : ymax > 1.5 ? 0.5 : 0.25;
+  for (let v = 0; v <= ymax + 1e-9; v += step) {
+    ctx.beginPath(); ctx.moveTo(padL, Y(v)); ctx.lineTo(padL + pw, Y(v)); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText(v.toFixed(2), padL - 6 * dpr, Y(v) + 4 * dpr);
+  }
+  ctx.save(); ctx.translate(12 * dpr, padT + ph / 2); ctx.rotate(-PI / 2); ctx.textAlign = "center";
+  ctx.fillText("I(θ) / I_incident,peak", 0, 0); ctx.restore();
+  // predicted markers
+  if (PRED) for (const o of PRED.orders) {
+    if (o.w < 0.01) continue;
+    ctx.strokeStyle = acc; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.lineWidth = 1.3 * dpr;
+    ctx.beginPath(); ctx.moveTo(X(o.th), padT); ctx.lineTo(X(o.th), padT + ph); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // incident alone
+  const { th, I, I0 } = FAR;
+  if (S.ai > 0) {
+    ctx.strokeStyle = muted; ctx.setLineDash([4 * dpr, 3 * dpr]); ctx.lineWidth = 1.2 * dpr; ctx.beginPath();
+    for (let t = 0; t < th.length; t++) { const x = X(th[t]), y = Y(I0[t]); t ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // total
+  ctx.beginPath(); ctx.moveTo(X(-90), Y(0));
+  for (let t = 0; t < th.length; t++) ctx.lineTo(X(th[t]), Y(I[t]));
+  ctx.lineTo(X(90), Y(0)); ctx.closePath();
+  ctx.globalAlpha = 0.18; ctx.fillStyle = hot; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = hot; ctx.lineWidth = 1.8 * dpr; ctx.beginPath();
+  for (let t = 0; t < th.length; t++) { const x = X(th[t]), y = Y(I[t]); t ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.stroke();
+  // peak labels
+  ctx.fillStyle = ink; ctx.textAlign = "center";
+  FAR.peaks.slice(0, 4).forEach(p => {
+    const x = X(p.th), y = Y(p.I);
+    ctx.beginPath(); ctx.arc(x, y, 3 * dpr, 0, 2 * PI); ctx.fill();
+    ctx.fillText(p.th.toFixed(2) + "°", Math.max(padL + 24 * dpr, Math.min(x, padL + pw - 24 * dpr)), Math.max(y - 8 * dpr, padT + 10 * dpr));
+  });
+}
+
+function updateReadout() {
+  $("verdict").innerHTML = PRED.verdict;
+  $("eq").innerHTML = PRED.eq;
+  const used = new Set();
+  let rows = `<tr><th>Beam</th><th>Predicted θ</th><th>Measured peak</th><th>Δ</th></tr>`;
+  for (const o of PRED.orders) {
+    if (o.w < 0.005) continue;
+    let best = null;
+    FAR.peaks.forEach((p, i) => { if (!used.has(i) && (best === null || Math.abs(p.th - o.th) < Math.abs(FAR.peaks[best].th - o.th))) best = i; });
+    let meas = "—", dd = "";
+    if (best !== null && Math.abs(FAR.peaks[best].th - o.th) < 3) { used.add(best); meas = FAR.peaks[best].th.toFixed(2) + "°"; const e = FAR.peaks[best].th - o.th; dd = `<span class="pill ${Math.abs(e) < 0.3 ? "ok" : "mid"}">${e >= 0 ? "+" : ""}${e.toFixed(2)}°</span>`; }
+    rows += `<tr><td>${o.label}</td><td class="num">${o.th.toFixed(2)}°</td><td class="num">${meas}</td><td>${dd}</td></tr>`;
+  }
+  FAR.peaks.forEach((p, i) => { if (!used.has(i) && i < 4) rows += `<tr><td>other peak</td><td class="num">—</td><td class="num">${p.th.toFixed(2)}°</td><td></td></tr>`; });
+  $("tbl").innerHTML = rows;
+  $("powerline").textContent = isFinite(FAR.power) ? `forward power = ${FAR.power.toFixed(2)} × incident beam${S.df ? " (incoherent sum)" : ""}` : "";
+}
+
+// ---------- loop ----------
+let dirty = true, redrawStatic = true, t0 = performance.now(), tAcc = 0, last = t0;
+const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (reduce) { S.playing = false; }
+function frame(now) {
+  const dt = (now - last) / 1000; last = now;
+  if (S.playing) tAcc += Math.min(dt, 0.1);
+  if (dirty) {
+    dirty = false;
+    if (S.mode === "sheet") buildEmitters(); else EM = { N: 0, x: [], sR: [], sI: [], d: 0 };
+    computeField(); computeFar(); PRED = predict(); updateReadout();
+    redrawStatic = true;
+  }
+  if (S.playing || redrawStatic) { drawField(tAcc); }
+  if (redrawStatic) { drawFar(); redrawStatic = false; }
+  requestAnimationFrame(frame);
+}
+
+buildControls(); sync();
+$("play").textContent = S.playing ? "Pause" : "Play";
+$("preset-2").classList.add("on");
+sizeCanvases();
+window.addEventListener("resize", () => { sizeCanvases(); });
+if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { redrawStatic = true; });
+requestAnimationFrame(frame);
+})();
+</script>
