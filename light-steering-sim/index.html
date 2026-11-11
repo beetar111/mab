@@ -93,6 +93,10 @@ td.num { font-family: var(--f-mono); }
 .pill.ok { color: var(--good); } .pill.bad { color: var(--hot); } .pill.mid { color: var(--warn); }
 .verdict { font-size: 14px; }
 
+.brief { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px clamp(14px, 3vw, 28px); display: grid; gap: 6px; }
+.brief h2 { font-family: var(--f-display); font-size: 1.1rem; margin: 0; }
+.brief p, .brief li { margin: 0; max-width: 90ch; }
+.brief ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .notes { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px clamp(14px, 3vw, 32px); display: grid; gap: 4px; }
 .notes h2 { font-family: var(--f-display); font-size: 1.25rem; margin: 18px 0 4px; text-wrap: balance; }
 .notes h2:first-child { margin-top: 0; }
@@ -110,6 +114,19 @@ td.num { font-family: var(--f-mono); }
     <p>An incident beam plus a wave you add. The left rail sets both. The field map shows what you would see in the plane of propagation, the scope below it shows where the energy goes far away, and the readout compares the measured exit angle θ with the law that predicts it.</p>
   </header>
 
+  <section class="brief" aria-label="How to read this simulation">
+    <h2>What this simulation tests, in brief</h2>
+    <p><strong>The question.</strong> Glass bends light because its electrons re-radiate a wave at the light's own frequency, and the sum of that wave and the incident wave points in a new direction. Can we skip the glass and produce that second wave ourselves, so that light bends in empty space?</p>
+    <p><strong>What is computed.</strong> One incident beam plus one added wave, both at the same frequency, summed point by point (the field map) and followed far away to see which directions carry the power (the scope). The program finds the exit angle from the computed field. It does not use the formula to find it. It then puts the result next to the formula so you can check that they agree.</p>
+    <p><strong>Three ways to make the added wave</strong> (the selector at the top of the controls):</p>
+    <ol>
+      <li><strong>A · Second beam in vacuum.</strong> Fringes appear where the beams cross, but the incident beam leaves at its original angle. <em>Result: no bending.</em></li>
+      <li><strong>B · Hologram lit by the same laser, projecting from a distance.</strong> The hologram rebuilds exactly the wave glass would have produced: the "refracted" wave plus a wave that cancels the original. Above z = 0 the light really does leave at the Snell's-law angle for the index n₂ you choose. Two catches show on screen. The cancellation also happens below z = 0, because a wave in free space cannot switch on at a plane. And the bent light's power comes from the hologram arm, not from the incident beam. <em>Result: the field looks refracted, but the bend has no surface and the incident beam's power is not redirected.</em></li>
+      <li><strong>C · Thin hologram / emitter sheet at z = 0, lit by the incident light itself.</strong> Each point on the sheet re-radiates the light that hits it with a programmed phase. This is Feynman's mechanism done artificially (a metasurface or thin phase hologram). The bend starts exactly at the sheet, and the incident power is what gets redirected. <em>Result: true refraction or diffraction without a bulk medium.</em></li>
+    </ol>
+    <p><strong>The rule that decides the exit angle</strong> in every case: sin θₜ = sin θᵢ + (λ/2π)·dΦ/dx, where dΦ/dx is how fast the added wave's phase changes along the surface. It only works while the added wave stays phase-locked to the incident light: Δf = 0, and a path difference well inside the laser's coherence length.</p>
+  </section>
+
   <div class="app">
     <aside class="panel" id="controls" aria-label="Simulation controls">
       <div class="ctl">
@@ -119,8 +136,9 @@ td.num { font-family: var(--f-mono); }
       <div class="ctl">
         <label for="mode">How the second wave is made</label>
         <select id="mode">
-          <option value="cross">Free beam crossing the incident beam (vacuum)</option>
-          <option value="sheet">Phase-locked sheet of emitters at z = 0</option>
+          <option value="cross">A. Free beam crossing the incident beam (vacuum)</option>
+          <option value="holo">B. Hologram lit by the same laser, projecting from a distance</option>
+          <option value="sheet">C. Thin hologram / emitter sheet at z = 0, lit by the incident light</option>
         </select>
       </div>
       <div class="group" id="g-inc">
@@ -128,6 +146,9 @@ td.num { font-family: var(--f-mono); }
       </div>
       <div class="group" id="g-add">
         <div class="group-title">Added wave</div>
+      </div>
+      <div class="group" id="g-holo">
+        <div class="group-title">Hologram arm (same laser)</div>
       </div>
       <div class="group" id="g-sheet">
         <div class="group-title">Emitter sheet</div>
@@ -205,6 +226,11 @@ td.num { font-family: var(--f-mono); }
       <li><strong>Cancellation costs energy.</strong> To remove the old beam you must radiate an equal and opposite wave. The sources absorb the incident power and re-emit it in the new direction. If κ = 0, the old beam is still there and you have only added a beam. A sheet of simple point sources also radiates backward, which shows up as reflection. Huygens sheets, which pair electric and magnetic responses, make the emission one-sided. Toggle the "one-sided" option to compare.</li>
     </ul>
 
+    <h2>2b. Projecting the wave from a hologram (mode B)</h2>
+    <p>A hologram lit by a reference beam split from the same laser reconstructs any field you recorded or computed, at exactly the laser's frequency. Phase locking is then automatic as long as the two arms differ in length by much less than the coherence length L<sub>c</sub>. The partial coherence is modelled as γ = e<sup>−ΔL/L<sub>c</sub></sup>, which multiplies the interference term. Design the hologram to reconstruct E<sub>holo</sub> = A·E<sub>t</sub> − κ·E<sub>inc</sub>, where E<sub>t</sub> is the beam at the Snell angle for index n₂. The sum then equals E<sub>t</sub>.</p>
+    <p>There is a theorem that limits this. A field that travels freely in empty space (it satisfies the Helmholtz equation) and is zero throughout any region is zero everywhere. So no projected wave can be zero below a plane and non-zero above it. If E<sub>holo</sub> cancels the incident beam above z = 0, it also cancels it below z = 0, all the way back to the hologram. A field that changes abruptly at a surface needs sources on that surface. That is why refraction needs a material (or mode C's sheet) at the interface. Energy follows the same logic. The cancelled incident power is not destroyed: in a real set-up the two arms are combined on a beam splitter, and destructive interference in one output port means constructive interference in the other.</p>
+    <p>The practical version of the hologram idea is mode C: a thin hologram or metasurface placed at the interface and lit by the incident light itself. It is locked by construction, its sources sit where the bend should start, and it redirects the incident light's own power. Commercial holographic optical elements and metasurface lenses work this way.</p>
+
     <h2>3. The one relationship behind all of it</h2>
     <p>Whatever imposes the extra phase, the transmitted wave has to match the phase of the total field along the sheet. Its tangential wavenumber is the incident one plus the gradient you wrote, plus any multiple of the grating vector:</p>
     <div class="eq">k·sin θ<sub>t</sub> = k·sin θ<sub>i</sub> + dΦ/dx + m·2π/Λ &nbsp;&nbsp;⇔&nbsp;&nbsp; sin θ<sub>t</sub> = sin θ<sub>i</sub> + (λ/2π)·dΦ/dx + m·λ/Λ</div>
@@ -256,6 +282,7 @@ const S = {
   profile: "linear", dphi: 30, pitch: 150, W: 16, huygens: true,
   M: 1.4, gsrc: "manual", Lam: 2.0, fac: 2.0, vac: 4200, lamp: 532, alpha: 10,
   thc: -30,
+  n2: 1.5, zh: -4.5, dL: 0, Lc: 100,
   show: "total", qty: "field", playing: true
 };
 
@@ -268,9 +295,13 @@ const CTL = [
   { g: "g-add", id: "thc", label: "Second beam angle θ꜀", min: -80, max: 80, step: 0.5, fmt: v => v.toFixed(1) + "°", modes: ["cross"] },
   { g: "g-add", id: "A", label: "Amplitude A (× incident)", min: 0, max: 2, step: 0.01, fmt: v => v.toFixed(2) },
   { g: "g-add", id: "phi0", label: "Phase offset φ₀", min: -180, max: 180, step: 1, fmt: v => v + "°", help: "Phase of the added wave relative to the incident wave at the sheet." },
-  { g: "g-add", id: "kappa", label: "Cancel incident κ", min: 0, max: 1, step: 0.01, fmt: v => v.toFixed(2), modes: ["sheet"], help: "1 means the sheet also radiates −E_inc (the extinction wave)." },
+  { g: "g-add", id: "kappa", label: "Cancel incident κ", min: 0, max: 1, step: 0.01, fmt: v => v.toFixed(2), modes: ["sheet", "holo"], help: "1 means the added wave also contains −E_inc (the extinction wave)." },
   { g: "g-add", id: "df", label: "Frequency mismatch Δf", min: 0, max: 2, step: 0.05, fmt: v => v === 0 ? "0 (locked)" : v.toFixed(2) + " beats/s", help: "Shown slowed down. A real 1 MHz offset washes the effect out within about 1 µs." },
 
+  { g: "g-holo", id: "n2", label: "Refractive index to imitate n₂", min: 0.5, max: 3, step: 0.01, fmt: v => v.toFixed(2), modes: ["holo"], help: "The hologram is designed so the light leaves at the Snell's-law angle for a medium of this index." },
+  { g: "g-holo", id: "zh", label: "Hologram plate position z_h", min: -5.8, max: -0.5, step: 0.1, fmt: v => v.toFixed(1) + " µm", modes: ["holo"] },
+  { g: "g-holo", id: "dL", label: "Path difference, hologram arm vs incident arm ΔL", min: 0, max: 300, step: 1, fmt: v => v + " mm", modes: ["holo"], help: "Both arms come from one laser. They stay phase-locked only while ΔL is small compared with the laser's coherence length." },
+  { g: "g-holo", id: "Lc", label: "Laser coherence length L_c", min: 1, max: 1000, step: 1, fmt: v => v + " mm", modes: ["holo"], help: "About 0.1–1 mm for a laser diode, about 100 mm for a HeNe, 1 m to km for a single-frequency laser." },
   { g: "g-sheet", id: "profile", type: "select", label: "Phase profile Φ(x) across the sheet", modes: ["sheet"],
     opts: [["linear", "Linear ramp: metasurface / phased array"], ["sinus", "Sinusoidal: grating written by a wave"], ["uniform", "Uniform: Feynman's plate"]] },
   { g: "g-sheet", id: "dphi", label: "Phase step per emitter Δφ", min: -180, max: 180, step: 1, fmt: v => v + "°", modes: ["sheet"], profiles: ["linear"] },
@@ -296,6 +327,8 @@ const PRESETS = [
   { name: "Coherence lost", set: { mode: "sheet", profile: "linear", dphi: 30, pitch: 150, A: 1, kappa: 1, phi0: 0, df: 0.6, thi: 20 } },
   { name: "Grating lobes", set: { mode: "sheet", profile: "linear", dphi: 60, pitch: 900, A: 1, kappa: 1, phi0: 0, df: 0, thi: 10 } },
   { name: "Sound wave (AOM)", set: { mode: "sheet", profile: "sinus", gsrc: "acoustic", fac: 2, vac: 4200, M: 1.4, A: 1, kappa: 1, phi0: 0, df: 0, thi: 0, pitch: 150 } },
+  { name: "Hologram from a distance (n = 1.5)", set: { mode: "holo", n2: 1.5, zh: -4.5, A: 1, kappa: 1, phi0: 0, df: 0, dL: 0, Lc: 100, thi: 30 } },
+  { name: "Hologram, path mismatch", set: { mode: "holo", n2: 1.5, zh: -4.5, A: 1, kappa: 1, phi0: 0, df: 0, dL: 150, Lc: 100, thi: 30 } },
   { name: "Light-written grating", set: { mode: "sheet", profile: "sinus", gsrc: "optical", lamp: 532, alpha: 10, M: 1.8, A: 1, kappa: 1, phi0: 0, df: 0, thi: 5, pitch: 150 } },
 ];
 
@@ -352,8 +385,9 @@ function sync() {
     if (c.gsrc && !c.gsrc.includes(S.gsrc)) vis = false;
     el.closest(".ctl").hidden = !vis;
   }
-  $("g-sheet").querySelector(".group-title").textContent = S.mode === "sheet" ? "Emitter sheet" : "Observation aperture";
+  $("g-sheet").querySelector(".group-title").textContent = S.mode === "sheet" ? "Emitter sheet" : "Beam aperture";
   $("g-grat").hidden = !(S.mode === "sheet" && S.profile === "sinus");
+  $("g-holo").hidden = S.mode !== "holo";
 }
 
 // ---------- physics ----------
@@ -430,13 +464,74 @@ function computeField() {
           re += a * (spR[j] * c - spI[j] * s);
           im += a * (spR[j] * s + spI[j] * c);
         }
-      } else {
+      } else if (S.mode === "cross") {
         const ph2 = k * (xx * sC + z * cC) + rad(S.phi0);
         re = S.A * S.ai * Math.cos(ph2); im = S.A * S.ai * Math.sin(ph2);
       }
-      EcR[p] = re; EcI[p] = im;
+      if (S.mode !== "holo") { EcR[p] = re; EcI[p] = im; }
     }
   }
+  if (S.mode === "holo") holoField();
+}
+
+// coherence between incident light and added wave: 1 = fully phase-locked
+function coh() { return (S.df === 0 ? 1 : 0) * (S.mode === "holo" ? Math.exp(-Math.abs(S.dL) / S.Lc) : 1); }
+function holoTarget() {
+  const sI = Math.sin(rad(S.thi)), st = sI / S.n2;
+  return { st, ok: Math.abs(st) <= 1, tht: Math.abs(st) <= 1 ? deg(Math.asin(st)) : NaN };
+}
+// radix-2 FFT, in place. inv = true → inverse (unnormalised)
+function fft(re, im, inv) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let b = n >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const a = (inv ? 2 : -2) * PI / len, wr = Math.cos(a), wi = Math.sin(a);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let j = 0; j < len / 2; j++) {
+        const ur = re[i + j], ui = im[i + j], k2 = i + j + len / 2;
+        const vr = re[k2] * cr - im[k2] * ci, vi = re[k2] * ci + im[k2] * cr;
+        re[i + j] = ur + vr; im[i + j] = ui + vi; re[k2] = ur - vr; im[k2] = ui - vi;
+        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
+      }
+    }
+  }
+}
+// Hologram field: designed so that at z = 0 it equals  win(x)·[A·E_t − κ·E_inc],
+// then propagated as a free wave (angular spectrum) to every z above the plate.
+const NF = 1024;
+let HOLO = null;
+function holoAperture() {
+  const k = kOf(), sI = Math.sin(rad(S.thi)), { st } = holoTarget();
+  const xs = new Float64Array(NF), uR = new Float64Array(NF), uI = new Float64Array(NF), win = new Float64Array(NF);
+  for (let j = 0; j < NF; j++) {
+    const x = (j - NF / 2 + 0.5) * DX; xs[j] = x;
+    const w = Math.exp(-Math.pow(2 * x / S.W, 16)); win[j] = w;
+    const pt = k * x * st + rad(S.phi0), pi = k * x * sI;
+    const At = Math.abs(st) <= 1 ? S.A : 0;
+    uR[j] = S.ai * w * (At * Math.cos(pt) - S.kappa * Math.cos(pi));
+    uI[j] = S.ai * w * (At * Math.sin(pt) - S.kappa * Math.sin(pi));
+  }
+  return { xs, uR, uI, win };
+}
+function holoField() {
+  const k = kOf(), ap = holoAperture();
+  const sR = Float64Array.from(ap.uR), sIm = Float64Array.from(ap.uI);
+  fft(sR, sIm, false);
+  const rr = new Float64Array(NF), ri = new Float64Array(NF);
+  for (let iz = 0; iz < NZ; iz++) {
+    const z = Z1 - (iz + 0.5) * DZ;
+    if (z < S.zh) { for (let ix = 0; ix < NX; ix++) { EcR[iz * NX + ix] = 0; EcI[iz * NX + ix] = 0; } continue; }
+    for (let m = 0; m < NF; m++) {
+      const mm = m < NF / 2 ? m : m - NF, kx = 2 * PI * mm / (NF * DX);
+      if (Math.abs(kx) >= k) { rr[m] = 0; ri[m] = 0; continue; }
+      const kz = Math.sqrt(k * k - kx * kx), c = Math.cos(kz * z), s = Math.sin(kz * z);
+      rr[m] = (sR[m] * c - sIm[m] * s) / NF; ri[m] = (sR[m] * s + sIm[m] * c) / NF;
+    }
+    fft(rr, ri, true);
+    for (let ix = 0; ix < NX; ix++) { const j = ix - NX / 2 + NF / 2; EcR[iz * NX + ix] = rr[j]; EcI[iz * NX + ix] = ri[j]; }
+  }
+  HOLO = ap;
 }
 
 function sinc(u) { return Math.abs(u) < 1e-8 ? 1 : Math.sin(u) / u; }
@@ -455,13 +550,23 @@ function computeFar() {
   const sC = Math.sin(rad(S.thc));
   const NT = 1441, th = new Float64Array(NT), I = new Float64Array(NT), I0 = new Float64Array(NT), Ia = new Float64Array(NT);
   const norm = Math.pow(Math.max(S.ai, 1e-6) * W * cI, 2);
-  const locked = S.df === 0;
+  const g = coh();
   for (let t = 0; t < NT; t++) {
     const thd = -90 + 180 * t / (NT - 1), s = Math.sin(rad(thd)), c = Math.cos(rad(thd));
     th[t] = thd;
-    const Fi = S.ai * c * W * sinc(k * W * (sI - s) / 2);
+    let Fi = S.ai * c * W * sinc(k * W * (sI - s) / 2), FiI = 0;
     let FR = 0, FI = 0;
-    if (S.mode === "sheet") {
+    if (S.mode === "holo") {
+      // incident and hologram wave both seen through the same soft aperture, so they can cancel exactly
+      Fi = 0;
+      for (let j = 0; j < NF; j++) {
+        const w = HOLO.win[j]; if (w < 1e-6) continue;
+        const x = HOLO.xs[j], pc = -k * x * s, cp = Math.cos(pc), sp = Math.sin(pc);
+        const pi = k * x * (sI - s);
+        Fi += S.ai * w * Math.cos(pi) * c * DX; FiI += S.ai * w * Math.sin(pi) * c * DX;
+        FR += (HOLO.uR[j] * cp - HOLO.uI[j] * sp) * c * DX; FI += (HOLO.uR[j] * sp + HOLO.uI[j] * cp) * c * DX;
+      }
+    } else if (S.mode === "sheet") {
       const ang = S.huygens ? 0.5 * (1 + c) : 1;
       for (let j = 0; j < EM.N; j++) {
         // s_j · i/(2k) · ang · e^{-ik x s}
@@ -473,9 +578,9 @@ function computeFar() {
       const amp = S.A * S.ai * c * W * sinc(k * W * (sC - s) / 2);
       FR = amp * Math.cos(rad(S.phi0)); FI = amp * Math.sin(rad(S.phi0));
     }
-    I0[t] = Fi * Fi / norm;
+    I0[t] = (Fi * Fi + FiI * FiI) / norm;
     Ia[t] = (FR * FR + FI * FI) / norm;
-    I[t] = locked ? ((Fi + FR) * (Fi + FR) + FI * FI) / norm : I0[t] + Ia[t];
+    I[t] = I0[t] + Ia[t] + 2 * g * (Fi * FR + FiI * FI) / norm;
   }
   // peaks
   let gmax = 0; for (let t = 0; t < NT; t++) gmax = Math.max(gmax, I[t]);
@@ -490,7 +595,8 @@ function computeFar() {
   }
   peaks.sort((p, q) => q.I - p.I);
   let P = 0, P0 = 0; for (let t = 0; t < NT; t++) { P += I[t]; P0 += I0[t]; }
-  FAR = { th, I, I0, gmax, peaks: peaks.slice(0, 6), power: P0 > 0 ? P / P0 : NaN };
+  let Pa = 0; for (let t = 0; t < NT; t++) Pa += Ia[t];
+  FAR = { th, I, I0, gmax, peaks: peaks.slice(0, 6), power: P0 > 0 ? P / P0 : NaN, padd: P0 > 0 ? Pa / P0 : NaN };
 }
 
 function predict() {
@@ -514,6 +620,28 @@ function predict() {
       `<div>sin θ = sin θ<sub>probe</sub> ± λ/Λ<sub>f</sub>  (switch to the sheet mode, sinusoidal profile)</div>`;
     out.verdict = `<span class="pill bad">no steering</span> In vacuum the second wave only adds fringes. The incident beam still leaves at θᵢ = ${f(thi, 1)}° for any amplitude or phase you choose.`;
     out.status = "bad";
+    return out;
+  }
+  if (S.mode === "holo") {
+    const { st, ok, tht } = holoTarget(), g = coh();
+    const ct = Math.sqrt(Math.max(0, 1 - st * st));
+    if (ok && S.A > 0.01) out.orders.push({ label: "'refracted' beam from hologram", th: tht, w: S.A * S.A });
+    const resid = 1 + S.kappa * S.kappa - 2 * g * S.kappa;  // average residual of incident direction
+    if (resid > 0.02) out.orders.push({ label: g < 1 ? "incident (not cancelled: arms not coherent)" : "un-cancelled incident", th: thi, w: resid });
+    out.eq =
+      `<div class="sub">Target: Snell's law for a medium of index n₂</div>` +
+      `<div class="big">sin θₜ = (n₁/n₂)·sin θᵢ = ${f(sI)} / ${f(S.n2, 2)} = <b>${f(st)}</b> ⇒ θₜ = ${ok ? f(tht, 2) + "°" : "total internal reflection"}</div>` +
+      `<div class="sub">Phase gradient the hologram must write along z = 0:</div>` +
+      `<div>dΦ/dx = k(sin θₜ − sin θᵢ) = ${f(2 * PI / lam)}·(${f(st)} − ${f(sI)}) = ${f(2 * PI / lam * (st - sI))} rad/µm</div>` +
+      `<div class="sub">Field the hologram reconstructs (same frequency ω, same laser):</div>` +
+      `<div class="big">E_holo = A·E_t − κ·E_inc  ⇒  E_inc + E_holo = A·E_t  (if γ = 1, κ = 1)</div>` +
+      `<div class="sub">Lossless choice A = √(cos θᵢ/cos θₜ) = ${ok ? f(Math.sqrt(Math.cos(rad(thi)) / ct)) : "—"}</div>` +
+      `<div class="sub">Coherence of the two arms: γ = exp(−ΔL/L_c) = exp(−${S.dL}/${S.Lc}) = ${f(Math.exp(-S.dL / S.Lc))}${S.df ? " · Δf ≠ 0 ⇒ γ = 0" : ""}</div>` +
+      `<div class="sub">Wavelength after the bend: λ = ${f(lam)} µm (vacuum). Real glass would give λ/n₂ = ${f(lam / S.n2)} µm.</div>`;
+    if (!ok) { out.verdict = `<span class="pill bad">no transmitted beam</span> sin θᵢ/n₂ > 1, so Snell's law has no real angle (total internal reflection).`; out.status = "bad"; }
+    else if (g < 0.9) { out.verdict = `<span class="pill bad">coherence lost</span> γ = ${f(g, 2)}. The hologram arm is no longer in step with the incident light, so the −E_inc part cannot cancel the original beam. You get two beams, at ${f(thi, 1)}° and ${f(tht, 2)}°, and nothing is bent.`; out.status = "bad"; }
+    else if (S.kappa < 0.95) { out.verdict = `<span class="pill mid">beam added, not bent</span> The hologram adds a beam at ${f(tht, 2)}°, but with κ = ${f(S.kappa, 2)} the original beam keeps going at ${f(thi, 1)}°.`; out.status = "mid"; }
+    else { out.verdict = `<span class="pill ok">looks refracted above z = 0</span> Above z = 0 the total field is a single beam at ${f(tht, 2)}°, the angle glass of n = ${f(S.n2, 2)} would give. <b>Look below z = 0, though:</b> the incident beam is already cancelled everywhere between the plate and z = 0, because a free wave cannot switch on at a plane. The bent beam's power comes from the hologram arm, and the cancelled incident power leaves through the other port of the beam combiner. To make the bend start at a surface, the hologram has to sit at that surface and be lit by the incident light (mode C).`; out.status = "ok"; }
     return out;
   }
   const d = S.pitch / 1000;
@@ -614,7 +742,7 @@ function drawField(t) {
   const c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(w + dw), s2 = Math.sin(w + dw);
   const incOn = S.show !== "added" ? 1 : 0, ctlOn = S.show !== "incident" ? 1 : 0;
   const ref = Math.max(S.ai, S.A * S.ai, 0.3);
-  const data = img.data, locked = S.df === 0;
+  const data = img.data, g = coh();
   for (let p = 0; p < NX * NZ; p++) {
     let r, g, b;
     if (S.qty === "field") {
@@ -625,7 +753,7 @@ function drawField(t) {
       else { r = 10 + a * 40; g = 14 + a * 150; b = 22 + a * 233; }
     } else {
       const ar = incOn * EiR[p], ai = incOn * EiI[p], br = ctlOn * EcR[p], bi = ctlOn * EcI[p];
-      let I = locked ? (ar + br) * (ar + br) + (ai + bi) * (ai + bi) : ar * ar + ai * ai + br * br + bi * bi;
+      let I = ar * ar + ai * ai + br * br + bi * bi + 2 * g * (ar * br + ai * bi);
       let u = Math.min(1, Math.pow(I / (2.2 * ref * ref), 0.6));
       r = 255 * Math.min(1, u * 1.7); g = 255 * Math.max(0, Math.min(1, (u - 0.35) * 1.6)); b = 255 * Math.max(0, Math.min(1, u < 0.4 ? u * 1.4 : (u - 0.75) * 3.5));
       r = 8 + r * 0.97; g = 10 + g * 0.96; b = 16 + b * 0.94;
@@ -657,6 +785,15 @@ function overlay() {
     ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(b, y); ctx.stroke(); ctx.setLineDash([]);
     if (EM.N <= 60) { ctx.fillStyle = "rgba(255,255,255,0.8)"; for (let j = 0; j < EM.N; j++) { const [px, py] = toPx(EM.x[j], 0); ctx.beginPath(); ctx.arc(px, py, 2 * dpr, 0, 2 * PI); ctx.fill(); } }
     ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillText("emitter sheet z = 0", a + 4 * dpr, y + 14 * dpr);
+  } else if (S.mode === "holo") {
+    const [a, y] = toPx(-S.W / 2, S.zh), [b] = toPx(S.W / 2, S.zh);
+    ctx.strokeStyle = "rgba(180,255,200,0.85)"; ctx.lineWidth = 3 * dpr;
+    ctx.beginPath(); ctx.moveTo(a, y); ctx.lineTo(b, y); ctx.stroke();
+    ctx.fillStyle = "rgba(180,255,200,0.95)"; ctx.fillText("hologram plate (lit by reference arm of the same laser)", a + 4 * dpr, y + 14 * dpr);
+    const [c0, y0] = toPx(-S.W / 2, 0), [c1] = toPx(S.W / 2, 0);
+    ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1 * dpr; ctx.setLineDash([2 * dpr, 5 * dpr]);
+    ctx.beginPath(); ctx.moveTo(c0, y0); ctx.lineTo(c1, y0); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillText("z = 0: design plane (empty space, no material)", c0 + 4 * dpr, y0 - 6 * dpr);
   } else {
     ctx.fillStyle = "rgba(255,255,255,0.75)";
     const [a, y] = toPx(-11.5, -5.3); ctx.fillText("vacuum: no material anywhere", a, y);
@@ -752,7 +889,7 @@ function updateReadout() {
   }
   FAR.peaks.forEach((p, i) => { if (!used.has(i) && i < 4) rows += `<tr><td>other peak</td><td class="num">—</td><td class="num">${p.th.toFixed(2)}°</td><td></td></tr>`; });
   $("tbl").innerHTML = rows;
-  $("powerline").textContent = isFinite(FAR.power) ? `forward power = ${FAR.power.toFixed(2)} × incident beam${S.df ? " (incoherent sum)" : ""}` : "";
+  $("powerline").textContent = isFinite(FAR.power) ? `forward power = ${FAR.power.toFixed(2)} × incident beam · power carried by the added wave alone = ${FAR.padd.toFixed(2)}×${coh() < 1 ? ` · coherence γ = ${coh().toFixed(2)}` : ""}` : "";
 }
 
 // ---------- loop ----------
