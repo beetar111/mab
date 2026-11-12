@@ -1,0 +1,35 @@
+{
+  "name": "OGPU-1",
+  "description": "Four 16×16 optical tensor cores written by light into a Sb2Se3-on-SiN slab. Each core computes y = W·x for an arbitrary real W (SVD mesh: Vᵀ mesh → Σ attenuators → U mesh). Weights are stored as written index patches: non-volatile, zero hold power, rewritable.",
+  "version": 1,
+  "platform": "pcm_sin",
+  "wavelength_nm": 1550,
+  "N": 16,
+  "seed": 1,
+  "process": {
+    "plate": "lcos",
+    "frames": 8,
+    "projNA": 0.4,
+    "drift": 0.01,
+    "exposure_s": 0.5,
+    "settle_s": 0.3
+  },
+  "system": {
+    "symbolRate_GHz": 10,
+    "wavelengths": 1,
+    "laserPerCore_mW": 20,
+    "wallPlug": 0.2,
+    "tec_W": 2,
+    "fiberPitch_um": 127,
+    "facetLoss_dB": 2.0,
+    "dacBits": 8,
+    "adcBits": 8,
+    "energy_pJ": { "modulator": 1.0, "dac": 1.0, "tia": 0.5, "adc": 2.0 }
+  },
+  "cores": [
+    { "name": "core0", "weights": "dct",        "pipeline": ["fanin", "meshV", "sigma", "meshU", "fanout"] },
+    { "name": "core1", "weights": "random:1",   "pipeline": ["fanin", "meshV", "sigma", "meshU", "fanout"] },
+    { "name": "core2", "weights": "random:2",   "pipeline": ["fanin", "meshV", "sigma", "meshU", "fanout"] },
+    { "name": "core3", "weights": "hadamard",   "pipeline": ["fanin", "meshV", "sigma", "meshU", "fanout"] }
+  ]
+}

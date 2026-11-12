@@ -1,0 +1,1435 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Optical GPU Designer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: EDA tool. Left: design rail (blocks, platform, process, system). Right: tabbed views (system → verify → floorplan → plate → performance → build → export). */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #16202b; --muted: #5a6877; --line: #d3dae2;
+  --accent: #0f6fd6; --si: #8a5cf6; --gpu: #6b7684; --hot: #d9480f; --good: #1b8a4c; --warn: #b7791f; --bad: #c92a2a;
+  --scope: #0b1118;
+  --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --panel: #161e27; --ink: #e3e9ef; --muted: #93a2b2; --line: #2a3542;
+  --accent: #5aa9ff; --si: #b79bff; --gpu: #9aa6b4; --hot: #ff8a4c; --good: #4fd08a; --warn: #f0b252; --bad: #ff6b6b; --scope: #070b10; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #161e27; --ink: #e3e9ef; --muted: #93a2b2; --line: #2a3542;
+  --accent: #5aa9ff; --si: #b79bff; --gpu: #9aa6b4; --hot: #ff8a4c; --good: #4fd08a; --warn: #f0b252; --bad: #ff6b6b; --scope: #070b10; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14.5px; line-height: 1.5; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 48px; }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--f-display); font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 0 0 4px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-size: 1rem; margin: 0; }
+h3 { font-family: var(--f-display); font-size: 0.9rem; margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+header p { margin: 0; color: var(--muted); max-width: 90ch; }
+.app { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.rail { display: grid; gap: 12px; }
+.ctl { display: grid; gap: 3px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ctl .v { font-family: var(--f-mono); color: var(--accent); }
+.ctl small, .cap { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=number] { width: 100%; }
+select, button, input[type=number] { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+select { width: 100%; }
+button { cursor: pointer; } button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); font-weight: 600; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.blocks { display: grid; gap: 6px; }
+.blk { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 6px 8px; background: var(--bg); }
+.blk .nm { font-weight: 600; font-size: 13px; } .blk .ds { font-size: 11.5px; color: var(--muted); }
+.blk .bt { display: flex; gap: 3px; } .blk .bt button { padding: 2px 7px; font-size: 12px; }
+.palette { display: flex; flex-wrap: wrap; gap: 5px; } .palette button { font-size: 12px; padding: 3px 8px; }
+.corelist { display: grid; gap: 6px; }
+.corerow { display: grid; grid-template-columns: 58px 1fr auto; gap: 6px; align-items: center; font-size: 13px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.tabs button { border: 1px solid transparent; background: transparent; font-family: var(--f-display); font-size: 13.5px; padding: 6px 11px; }
+.tabs button.on { background: var(--panel); border-color: var(--line); color: var(--accent); }
+.status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bar { height: 6px; width: 160px; background: var(--line); border-radius: 3px; overflow: hidden; } .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+canvas.dark { background: var(--scope); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; display: grid; gap: 1px; }
+.kpi .k { font-family: var(--f-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.kpi .val { font-family: var(--f-display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: 12px; color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td.num { font-family: var(--f-mono); }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.tag.ok { color: var(--good); } .tag.bad { color: var(--bad); } .tag.mid { color: var(--warn); } .tag.acc { color: var(--accent); }
+.steps { counter-reset: s; display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 10px; }
+.steps > li::before { content: counter(s); font-family: var(--f-display); font-size: 15px; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; }
+.steps p, .steps ul { margin: 2px 0 0; } .steps ul { padding-left: 1.1em; }
+pre.code { font-family: var(--f-mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; max-height: 360px; margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.sw { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.notes p, .notes li { max-width: 85ch; } .notes a { color: var(--accent); } .notes ol li { margin-bottom: 4px; font-size: 13.5px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Light-written photonics · v3 · design → verify → plate → build</div>
+    <h1>Optical GPU Designer</h1>
+    <p>Design an array of optical tensor cores from blocks, verify it with physics simulation, and compile it into the light patterns that write it: frames for a programmable plate (DMD or LCoS phase SLM) or a printable Fresnel plate, plus a GDSII file and a build plan. Every number on this page comes from the same engine as the command-line compiler <code>tools/run.js</code>.</p>
+  </header>
+
+  <div class="app">
+    <aside class="rail" aria-label="Design">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2>Design</h2><button class="primary" id="runBtn">Compile &amp; simulate</button></div>
+        <div class="status"><span id="status">Starting…</span><span class="bar"><i id="prog"></i></span></div>
+        <div class="ctl"><label for="d-name">Name</label><input id="d-name" type="text" style="font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)"></div>
+        <div class="ctl"><label for="d-plat">Light-writable platform</label><select id="d-plat"></select><small id="platNote"></small></div>
+        <div class="row2">
+          <div class="ctl"><label for="d-N">Core size N</label><select id="d-N"><option>4</option><option>8</option><option>16</option><option>32</option></select></div>
+          <div class="ctl"><label for="d-real">BPM realizations</label><select id="d-real"><option>4</option><option selected>6</option><option>10</option></select></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Core pipeline (blocks)</h2>
+        <div class="blocks" id="blocks"></div>
+        <div class="palette" id="palette"></div>
+        <small id="pipeMsg"></small>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><h2>Cores</h2><span><button id="addCore">+ core</button> <button id="rmCore">− core</button></span></div>
+        <div class="corelist" id="cores"></div>
+      </div>
+      <div class="card">
+        <h2>Writing process</h2>
+        <div class="ctl"><label for="p-plate">Plate</label><select id="p-plate"><option value="lcos">LCoS phase SLM (holographic Fresnel plate)</option><option value="dmd">DMD (direct imaging)</option></select></div>
+        <div class="row2">
+          <div class="ctl"><label for="p-frames"><span>Frames averaged</span><span class="v" id="v-frames"></span></label><input type="range" id="p-frames" min="1" max="32" step="1"></div>
+          <div class="ctl"><label for="p-NA"><span>Projector NA</span><span class="v" id="v-NA"></span></label><input type="range" id="p-NA" min="0.1" max="0.8" step="0.01"></div>
+        </div>
+        <div class="ctl"><label for="p-drift"><span>Illumination drift (rms)</span><span class="v" id="v-drift"></span></label><input type="range" id="p-drift" min="0" max="0.04" step="0.001"></div>
+      </div>
+      <div class="card">
+        <h2>System</h2>
+        <div class="row2">
+          <div class="ctl"><label for="s-rate">Symbol rate (GHz)</label><input type="number" id="s-rate" min="1" max="100" step="1"></div>
+          <div class="ctl"><label for="s-wl">Wavelengths (WDM)</label><input type="number" id="s-wl" min="1" max="16" step="1"></div>
+          <div class="ctl"><label for="s-laser">Laser per core (mW)</label><input type="number" id="s-laser" min="1" max="500" step="1"></div>
+          <div class="ctl"><label for="s-adc">ADC / DAC bits</label><input type="number" id="s-adc" min="4" max="12" step="1"></div>
+        </div>
+        <small>Energy per symbol (pJ): modulator <span id="e-mod"></span>, DAC <span id="e-dac"></span>, TIA <span id="e-tia"></span>, ADC <span id="e-adc"></span>. Edit them in the design JSON (Export tab).</small>
+      </div>
+    </aside>
+
+    <main style="display:grid;gap:12px;min-width:0">
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button data-tab="sys" class="on">System</button><button data-tab="ver">Verify</button><button data-tab="fp">Floorplan</button><button data-tab="pl">Plate</button><button data-tab="perf">Performance</button><button data-tab="build">Build</button><button data-tab="exp">Export</button><button data-tab="notes">Notes</button>
+      </nav>
+
+      <section id="t-sys" class="card">
+        <h2>System architecture</h2>
+        <canvas id="cvSys" class="dark" width="1000" height="520"></canvas>
+        <div class="cap" id="sysCap"></div>
+        <div class="tiles" id="kpis"></div>
+      </section>
+
+      <section id="t-ver" hidden style="display:grid;gap:12px">
+        <div class="card"><h2>Accuracy of every core (after writing, measurement and calibration)</h2><div class="tablewrap"><table id="accTbl"></table></div><div class="cap">ENOB = effective number of bits of y = W·x against the exact result. The run includes BPM-measured device errors, weight-level quantization, receiver noise and converter quantization.</div></div>
+        <div class="card">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><h2 style="margin-right:auto">Core detail</h2><select id="verCore" style="width:auto"></select><select id="verCal" style="width:auto"><option value="cal">calibrated</option><option value="uncal">uncalibrated</option></select></div>
+          <div class="grid3">
+            <div><h3>Target W (scaled)</h3><canvas id="cvW" width="256" height="256"></canvas></div>
+            <div><h3>Realized (real part, after detection)</h3><canvas id="cvWr" width="256" height="256"></canvas></div>
+            <div><h3>Measured vs exact output</h3><canvas id="cvSc" width="300" height="300"></canvas></div>
+          </div>
+          <div class="legend"><span><span class="sw" style="background:#3a7bd5"></span>negative</span><span><span class="sw" style="background:#e45d2f"></span>positive</span><span>Heat maps share one colour scale.</span></div>
+        </div>
+        <div class="card">
+          <h2>Workload: an image through the optical core</h2>
+          <div class="cap">Each row of a 96×96 test image is cut into N-pixel vectors, multiplied by W on the selected core (optically, with all errors), then inverted exactly in software. Optical errors show up as reconstruction noise.</div>
+          <div class="grid3">
+            <div><h3>Input</h3><canvas id="cvI0" width="96" height="96" style="image-rendering:pixelated"></canvas></div>
+            <div><h3>Optical W·x (normalized)</h3><canvas id="cvI1" width="96" height="96" style="image-rendering:pixelated"></canvas></div>
+            <div><h3>Reconstructed W⁻¹·(optical)</h3><canvas id="cvI2" width="96" height="96" style="image-rendering:pixelated"></canvas></div>
+          </div>
+          <div id="imgStat" class="cap"></div>
+        </div>
+        <div class="card"><h2>Measured MZI cell (BPM realizations of the written device)</h2><div class="tablewrap"><table id="poolTbl"></table></div></div>
+      </section>
+
+      <section id="t-fp" hidden class="card">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><h2 style="margin-right:auto">Floorplan (compiled layout)</h2>
+          <label class="cap" for="zoom">zoom</label><input type="range" id="zoom" min="0" max="1" step="0.001" value="0" style="width:200px">
+          <button id="zoomMzi">Zoom to first MZI</button><button id="zoomAll">Fit die</button></div>
+        <canvas id="cvFp" class="dark" width="1000" height="560"></canvas>
+        <div class="legend"><span><span class="sw" style="background:#6fa8ff"></span>written waveguide</span><span><span class="sw" style="background:#ffb03b"></span>weight patch (colour = dose)</span><span><span class="sw" style="background:#fff"></span>fiducial</span><span>Drag to pan. Blocks are labelled per core.</span></div>
+        <div class="cap" id="fpCap"></div>
+      </section>
+
+      <section id="t-pl" hidden style="display:grid;gap:12px">
+        <div class="card">
+          <h2>Exposure tiles</h2>
+          <canvas id="cvTiles" class="dark" width="1000" height="200"></canvas>
+          <div class="cap" id="tileCap">Click a tile to inspect it.</div>
+        </div>
+        <div class="grid3">
+          <div class="card"><h3>DMD frame (programmable plate, direct imaging)</h3><canvas id="cvDmd" class="dark" width="512" height="320"></canvas><div class="cap" id="dmdCap"></div></div>
+          <div class="card"><h3>Fresnel phase plate (LCoS or printed DOE)</h3><canvas id="cvHolo" class="dark" width="512" height="512"></canvas><div class="cap" id="holoCap">Press "Compute plate" (Gerchberg–Saxton, 512², in your browser).</div><button id="holoBtn">Compute plate for this tile</button></div>
+          <div class="card"><h3>Light it projects (simulated)</h3><canvas id="cvRec" class="dark" width="512" height="512"></canvas><div class="cap" id="recCap"></div></div>
+        </div>
+        <div class="card"><h2>Which plate to use</h2><div class="tablewrap"><table id="plateTbl"></table></div></div>
+      </section>
+
+      <section id="t-perf" hidden style="display:grid;gap:12px">
+        <div class="tiles" id="perfKpis"></div>
+        <div class="grid2">
+          <div class="card"><h2>Power breakdown (W)</h2><canvas id="cvPow" width="600" height="300"></canvas></div>
+          <div class="card"><h2>Efficiency (TOPS/W)</h2><canvas id="cvEff" width="600" height="300"></canvas></div>
+        </div>
+        <div class="card"><h2>Scaling with core size N (same platform, model)</h2><canvas id="cvScale" width="1000" height="320"></canvas><div class="cap">Light-written weights hold their value at zero power, so efficiency keeps improving as N grows: converter energy per MAC falls as 1/N. Thermo-optic weights grow as N², which caps silicon-photonics meshes. Die length grows as N, which is the main cost of weak index contrast.</div></div>
+        <div class="card"><h2>Where light-written beats silicon, and where it does not</h2><div class="tablewrap"><table id="advTbl"></table></div></div>
+      </section>
+
+      <section id="t-build" hidden class="card">
+        <h2>How to build it (generated from this design)</h2>
+        <ol class="steps" id="buildSteps"></ol>
+        <h2 style="margin-top:8px">Bill of materials (equipment classes)</h2>
+        <div class="tablewrap"><table id="bomTbl"></table></div>
+        <div class="cap">The full procedure with safety, calibration and test details is in <code>optical-gpu/docs/BUILD.md</code> in the repository.</div>
+      </section>
+
+      <section id="t-exp" hidden style="display:grid;gap:12px">
+        <div class="card">
+          <h2>Export</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button id="xJson">Design file (.json)</button><button id="xGds">Layout (.gds)</button><button id="xCsv">Weight program (.csv)</button><button id="xDmd">Selected DMD frame (.png)</button><button id="xHolo">Selected Fresnel plate (.png)</button><button id="xCopy">Copy design JSON</button>
+          </div>
+          <div class="cap" id="expMsg">Downloads work when this page is opened from the repository (<code>optical-gpu/designer/index.html</code>). The Claude viewer blocks downloads, so use "Copy design JSON" there or run the command-line compiler, which writes every file:</div>
+          <pre class="code">cd optical-gpu
+node tools/run.js designs/ogpu-1.json build/ogpu-1 --all-tiles</pre>
+        </div>
+        <div class="card"><h2>Design file</h2><pre class="code" id="jsonView"></pre></div>
+      </section>
+
+      <section id="t-notes" hidden class="card notes">
+        <h2>What this is, honestly</h2>
+        <p>An "optical GPU" here means an array of analog optical tensor cores. Each one computes y = W·x for an N×N matrix in a single pass of light, at the modulator symbol rate. Control flow, memory, nonlinear activations and accumulation stay in an electronic host (FPGA or ASIC). That is how every photonic AI accelerator is built. The precision is about 4–6 effective bits, which suits inference workloads that tolerate low precision.</p>
+        <h2>The method</h2>
+        <ul>
+          <li><strong>Matrix → mesh.</strong> W = U·Σ·Vᵀ (SVD). Vᵀ and U are unitary and are factored into a rectangular mesh of N(N−1)/2 MZIs each (Clements decomposition). Σ is a column of MZI attenuators. When singular values repeat, the free rotation in the SVD is randomized, so no switch sits at an exact bar or cross state.</li>
+          <li><strong>Device physics.</strong> A mode solver and split-step BPM design the cell (single-mode width, 50:50 coupler, bends at the bend-loss limit). The process is centered on written test MZIs. Several noisy writes give the pool of real devices: coupler angles, arm-phase offset and loss.</li>
+          <li><strong>Calibration.</strong> After writing, each MZI is measured. Its phases are re-solved for its real couplers, with leftover phase errors carried forward and absorbed by later shifters and the receiver phase. The weight patches are then rewritten closed-loop. Without calibration, no mesh computes.</li>
+          <li><strong>Layout → plate.</strong> Waveguides are written at half the material's index range, and weight patches use the other half (patch length λ/Δn gives 2π). The die is cut into exposure tiles at a slab pixel of w/4. A DMD images each tile directly, or a phase SLM or printed plate projects it holographically (Gerchberg–Saxton with a lens term = Fresnel plate).</li>
+        </ul>
+        <h2>Not modelled</h2>
+        <ul><li>Vertical confinement: the slab is treated as 2-D with an effective index.</li><li>Thermal crosstalk between patches during writing.</li><li>Crossings: none are needed.</li><li>Wavelength dependence of the couplers, which limits WDM channel count.</li><li>Packaging tolerances.</li><li>Sb₂Se₃ multi-level stability over time.</li></ul>
+        <h2>Sources</h2>
+        <ol>
+          <li>W. R. Clements et al., "Optimal design for universal multiport interferometers," <em>Optica</em> 3, 1460 (2016).</li>
+          <li>Y. Shen et al., "Deep learning with coherent nanophotonic circuits," <em>Nature Photonics</em> 11, 441 (2017).</li>
+          <li>S. Bandyopadhyay, R. Hamerly, D. Englund, "Hardware error correction for programmable photonics," <em>Optica</em> 8, 1247 (2021).</li>
+          <li>R. Hamerly et al., "Asymptotically fault-tolerant programmable photonics," <em>Nature Communications</em> 13, 6831 (2022).</li>
+          <li>W. Bogaerts et al., "Programmable photonic circuits," <em>Nature</em> 586, 207 (2020).</li>
+          <li>M. Delaney et al., "A new family of ultralow loss reversible phase-change materials for photonic integrated circuits: Sb₂S₃ and Sb₂Se₃," <em>Adv. Funct. Mater.</em> 30, 2002447 (2020).</li>
+          <li>C. Wu et al., "Freeform direct-write and rewritable photonic integrated circuits in phase-change thin films," <em>Science Advances</em> 10, eadk1361 (2024).</li>
+          <li>R. Bruck et al., "All-optical spatial light modulator for reconfigurable silicon photonic circuits," <em>Optica</em> 3, 396 (2016).</li>
+          <li>R. W. Gerchberg, W. O. Saxton, <em>Optik</em> 35, 237 (1972); M. Pasienski, B. DeMarco, <em>Opt. Express</em> 16, 2176 (2008).</li>
+          <li>M. D. Feit, J. A. Fleck, <em>Appl. Opt.</em> 17, 3990 (1978): BPM. M. Heiblum, J. H. Harris, <em>IEEE JQE</em> 11, 75 (1975): conformal bend analysis.</li>
+          <li>D. A. B. Miller, "Self-configuring universal linear optical component," <em>Photonics Research</em> 1, 1 (2013).</li>
+          <li>NVIDIA H100 Tensor Core GPU datasheet: INT8 dense ≈ 1,979 TOPS at 700 W (SXM). Check the current version.</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+/* OTC — Optically-written Tensor Core engine.
+ * One file, no dependencies. Runs in the browser (global `OTC`) and in Node (`require`).
+ * Units: lengths in µm, wavelengths in µm unless named *_nm, phases in rad.
+ *
+ *  platform + process ─► cell design (mode solver + BPM) ─► device statistics (noisy BPM realizations)
+ *  design file (blocks, weights) ─► SVD + Clements decomposition ─► realized matrix with errors ─► accuracy
+ *  design file ─► layout (paths, weight patches, fiducials) ─► raster tiles ─► DMD frames / LCoS holograms ─► GDSII
+ */
+(function (root) {
+"use strict";
+const PI = Math.PI, TAU = 2 * PI;
+const OTC = { version: "1.0.0" };
+
+// ───────────────────────── numerics ─────────────────────────
+function makeFFT(n) {
+  const bits = Math.round(Math.log2(n)), rev = new Uint32Array(n);
+  for (let i = 0; i < n; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); rev[i] = r; }
+  const cs = new Float64Array(n / 2), sn = new Float64Array(n / 2);
+  for (let i = 0; i < n / 2; i++) { cs[i] = Math.cos(TAU * i / n); sn[i] = Math.sin(TAU * i / n); }
+  return function (re, im, inv) {
+    for (let i = 0; i < n; i++) { const j = rev[i]; if (j > i) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+    for (let size = 2; size <= n; size <<= 1) {
+      const half = size >> 1, step = n / size;
+      for (let i = 0; i < n; i += size) for (let j = i, k = 0; j < i + half; j++, k += step) {
+        const l = j + half, c = cs[k], s = inv ? sn[k] : -sn[k];
+        const tr = re[l] * c - im[l] * s, ti = re[l] * s + im[l] * c;
+        re[l] = re[j] - tr; im[l] = im[j] - ti; re[j] += tr; im[j] += ti;
+      }
+    }
+    if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  };
+}
+OTC.makeFFT = makeFFT;
+function erf(x) { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + 0.3275911 * x); return s * (1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x)); }
+function hash(i, j, seed) { let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(seed, 2246822519); h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+function gl(i, j, s) { const u = hash(i, j, s) + 1e-12, v = hash(i, j, s + 977); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function gaussR(r) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(TAU * r()); }
+OTC.rng = rng;
+
+// complex helpers ([re, im] pairs) and dense complex matrices (arrays of rows)
+const C = {
+  mul: (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]],
+  add: (a, b) => [a[0] + b[0], a[1] + b[1]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1]],
+  conj: a => [a[0], -a[1]],
+  abs: a => Math.hypot(a[0], a[1]),
+  abs2: a => a[0] * a[0] + a[1] * a[1],
+  arg: a => Math.atan2(a[1], a[0]),
+  exp: p => [Math.cos(p), Math.sin(p)],
+  scale: (a, s) => [a[0] * s, a[1] * s],
+  div: (a, b) => { const d = b[0] * b[0] + b[1] * b[1]; return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d]; },
+};
+OTC.C = C;
+const M = {
+  eye: n => Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => [i === j ? 1 : 0, 0])),
+  fromReal: A => A.map(r => r.map(v => [v, 0])),
+  mul: (A, B) => { const n = A.length, m = B[0].length, k = B.length, R = []; for (let i = 0; i < n; i++) { const row = []; for (let j = 0; j < m; j++) { let re = 0, im = 0; for (let t = 0; t < k; t++) { const a = A[i][t], b = B[t][j]; re += a[0] * b[0] - a[1] * b[1]; im += a[0] * b[1] + a[1] * b[0]; } row.push([re, im]); } R.push(row); } return R; },
+  dagger: A => A[0].map((_, j) => A.map(r => C.conj(r[j]))),
+  copy: A => A.map(r => r.map(v => [v[0], v[1]])),
+};
+OTC.M = M;
+// apply a 2×2 block T on rows (a, a+1) from the left / on columns from the right, in place
+function leftApply(U, a, T) { const n = U[0].length; for (let j = 0; j < n; j++) { const x = U[a][j], y = U[a + 1][j]; U[a][j] = C.add(C.mul(T[0][0], x), C.mul(T[0][1], y)); U[a + 1][j] = C.add(C.mul(T[1][0], x), C.mul(T[1][1], y)); } }
+function rightApply(U, a, T) { const n = U.length; for (let i = 0; i < n; i++) { const x = U[i][a], y = U[i][a + 1]; U[i][a] = C.add(C.mul(x, T[0][0]), C.mul(y, T[1][0])); U[i][a + 1] = C.add(C.mul(x, T[0][1]), C.mul(y, T[1][1])); } }
+const inv2 = T => [[C.conj(T[0][0]), C.conj(T[1][0])], [C.conj(T[0][1]), C.conj(T[1][1])]];   // unitary inverse
+
+// ───────────────────────── MZI model ─────────────────────────
+// Physical MZI: coupler(α1) → phase θ on upper arm → coupler(α2) → (preceded by) phase φ on upper input.
+// T = g · B(α2) · diag(e^{iθ},1) · B(α1) · diag(e^{iφ},1),  B(α) = [[cos α, i sin α],[i sin α, cos α]].
+// Ideal (α = π/4, g = 1): T = i e^{iθ/2} [[e^{iφ} sin(θ/2), cos(θ/2)], [e^{iφ} cos(θ/2), −sin(θ/2)]];  θ = 0 → full cross.
+function mziT(theta, phi, a1 = PI / 4, a2 = PI / 4, g = 1) {
+  const B = a => [[[Math.cos(a), 0], [0, Math.sin(a)]], [[0, Math.sin(a)], [Math.cos(a), 0]]];
+  const b1 = B(a1), b2 = B(a2), et = C.exp(theta), ep = C.exp(phi);
+  const X = [[C.mul(et, b1[0][0]), C.mul(et, b1[0][1])], [b1[1][0], b1[1][1]]];      // diag(e^{iθ},1)·B1
+  const Y = [[C.add(C.mul(b2[0][0], X[0][0]), C.mul(b2[0][1], X[1][0])), C.add(C.mul(b2[0][0], X[0][1]), C.mul(b2[0][1], X[1][1]))],
+             [C.add(C.mul(b2[1][0], X[0][0]), C.mul(b2[1][1], X[1][0])), C.add(C.mul(b2[1][0], X[0][1]), C.mul(b2[1][1], X[1][1]))]];
+  return [[C.scale(C.mul(Y[0][0], ep), g), C.scale(Y[0][1], g)], [C.scale(C.mul(Y[1][0], ep), g), C.scale(Y[1][1], g)]];
+}
+OTC.mziT = mziT;
+const wrap = p => ((p % TAU) + TAU) % TAU;
+
+// ───────────────────────── Clements decomposition ─────────────────────────
+// Returns {mzis:[{m, theta, phi, col}] in light-travel order, D:[complex] output phases}, U = D · Π T.
+function clements(Uin) {
+  const N = Uin.length, U = M.copy(Uin), right = [], left = [], eps = 1e-12;
+  for (let i = 0; i < N - 1; i++) {
+    if (i % 2 === 0) {
+      for (let j = 0; j <= i; j++) {
+        const r = N - 1 - j, c = i - j, u0 = U[r][c], u1 = U[r][c + 1];
+        let th, ph;
+        if (C.abs(u0) < eps) { th = PI; ph = 0; } else if (C.abs(u1) < eps) { th = 0; ph = 0; }
+        else { th = 2 * Math.atan2(C.abs(u1), C.abs(u0)); ph = C.arg(u0) - C.arg(u1) - PI; }
+        const T = mziT(th, ph); rightApply(U, c, inv2(T)); right.push({ m: c, theta: th, phi: ph });
+      }
+    } else {
+      for (let j = 1; j <= i + 1; j++) {
+        const x = N + j - i - 2, c = j - 1, u0 = U[x - 1][c], u1 = U[x][c];
+        let th, ph;
+        if (C.abs(u1) < eps) { th = PI; ph = 0; } else if (C.abs(u0) < eps) { th = 0; ph = 0; }
+        else { th = 2 * Math.atan2(C.abs(u0), C.abs(u1)); ph = C.arg(u1) - C.arg(u0); }
+        const T = mziT(th, ph); leftApply(U, x - 1, T); left.push({ m: x - 1, theta: th, phi: ph });
+      }
+    }
+  }
+  // move the left-hand inverses through the diagonal:  L⁻¹ · D = D' · T'
+  let D = U.map((r, i) => r[i]);
+  const moved = [];
+  for (let k = left.length - 1; k >= 0; k--) {
+    const L = left[k], a = L.m, Li = inv2(mziT(L.theta, L.phi));
+    const A = [[C.mul(Li[0][0], D[a]), C.mul(Li[0][1], D[a + 1])], [C.mul(Li[1][0], D[a]), C.mul(Li[1][1], D[a + 1])]];
+    const th = 2 * Math.atan2(C.abs(A[0][0]), C.abs(A[0][1])), s = Math.sin(th / 2), c = Math.cos(th / 2), K = C.mul([0, 1], C.exp(th / 2));
+    let da, db, ph = 0;
+    if (c < 1e-9) { da = C.div(A[0][0], K); db = C.scale(C.div(A[1][1], K), -1); }
+    else if (s < 1e-9) { da = C.div(A[0][1], K); db = C.div(A[1][0], K); }
+    else { da = C.scale(C.div(A[0][1], K), 1 / c); db = C.scale(C.div(A[1][1], K), -1 / s); ph = C.arg(C.div(A[0][0], C.scale(C.mul(da, K), s))); }
+    D[a] = da; D[a + 1] = db; moved.push({ m: a, theta: th, phi: ph });
+  }
+  // light order: right list (in order), then moved list reversed... moved was built from innermost (k = last) outward:
+  // U = D_fin · T'_1 · … · T'_k · R_m … R_1  → applied: R_1 … R_m, T'_k … T'_1
+  const seq = right.slice().concat(moved.slice());       // moved[0] = T'_k (innermost, applied first after R)
+  const next = new Array(N).fill(0);
+  for (const z of seq) { const col = Math.max(next[z.m], next[z.m + 1]); z.col = col; next[z.m] = next[z.m + 1] = col + 1; z.theta = wrap(z.theta); z.phi = wrap(z.phi); }
+  return { mzis: seq, D, depth: Math.max(...next) };
+}
+function meshMatrix(N, mzis, D, devFn) {      // forward model; devFn(z) → 2×2 realized block
+  const U = M.eye(N);
+  for (const z of mzis) leftApply(U, z.m, devFn ? devFn(z) : mziT(z.theta, z.phi));
+  if (D) for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) U[i][j] = C.mul(D[i], U[i][j]);
+  return U;
+}
+OTC.clements = clements; OTC.meshMatrix = meshMatrix;
+
+// ───────────────────────── real SVD (one-sided Jacobi) ─────────────────────────
+function svd(W) {
+  const n = W.length, A = W.map(r => r.slice()), V = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+  for (let sweep = 0; sweep < 60; sweep++) {
+    let off = 0;
+    for (let p = 0; p < n - 1; p++) for (let q = p + 1; q < n; q++) {
+      let a = 0, b = 0, g = 0; for (let i = 0; i < n; i++) { a += A[i][p] ** 2; b += A[i][q] ** 2; g += A[i][p] * A[i][q]; }
+      if (Math.abs(g) <= 1e-15 * Math.sqrt(a * b) || g === 0) continue;
+      off = Math.max(off, Math.abs(g) / Math.sqrt(a * b));
+      const z = (b - a) / (2 * g), t = Math.sign(z || 1) / (Math.abs(z) + Math.sqrt(1 + z * z)), c = 1 / Math.sqrt(1 + t * t), s = c * t;
+      for (let i = 0; i < n; i++) { const x = A[i][p], y = A[i][q]; A[i][p] = c * x - s * y; A[i][q] = s * x + c * y; const v = V[i][p], w = V[i][q]; V[i][p] = c * v - s * w; V[i][q] = s * v + c * w; }
+    }
+    if (off < 1e-13) break;
+  }
+  const S = [], U = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (let j = 0; j < n; j++) { let s = 0; for (let i = 0; i < n; i++) s += A[i][j] ** 2; s = Math.sqrt(s); S.push(s); for (let i = 0; i < n; i++) U[i][j] = s > 1e-12 ? A[i][j] / s : 0; }
+  // complete U for zero singular values (Gram–Schmidt against the standard basis)
+  for (let j = 0; j < n; j++) if (S[j] <= 1e-12) {
+    for (let e = 0; e < n; e++) {
+      const v = new Array(n).fill(0); v[e] = 1;
+      for (let k = 0; k < n; k++) if (k !== j && (S[k] > 1e-12 || k < j)) { let d = 0; for (let i = 0; i < n; i++) d += v[i] * U[i][k]; for (let i = 0; i < n; i++) v[i] -= d * U[i][k]; }
+      const nv = Math.hypot(...v); if (nv > 1e-6) { for (let i = 0; i < n; i++) U[i][j] = v[i] / nv; break; }
+    }
+  }
+  return { U, S, V };   // W = U · diag(S) · Vᵀ
+}
+OTC.svd = svd;
+
+// ───────────────────────── weights library ─────────────────────────
+OTC.weights = function (spec, N) {
+  if (Array.isArray(spec)) return spec;
+  const [kind, arg] = String(spec).split(":");
+  const W = Array.from({ length: N }, () => new Array(N).fill(0));
+  if (kind === "dct") { for (let k = 0; k < N; k++) for (let n = 0; n < N; n++) W[k][n] = Math.sqrt((k ? 2 : 1) / N) * Math.cos(PI * (n + 0.5) * k / N); }
+  else if (kind === "hadamard") { for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) { let b = i & j, p = 0; while (b) { p ^= b & 1; b >>= 1; } W[i][j] = (p ? -1 : 1) / Math.sqrt(N); } }
+  else if (kind === "identity") { for (let i = 0; i < N; i++) W[i][i] = 1; }
+  else if (kind === "blur") { for (let i = 0; i < N; i++) for (let d = -1; d <= 1; d++) { const j = i + d; if (j >= 0 && j < N) W[i][j] = d ? 0.25 : 0.5; } }
+  else { const r = rng(+(arg || 1) * 7919 + 13); for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) W[i][j] = gaussR(r) / Math.sqrt(N); }
+  return W;
+};
+
+// ───────────────────────── platforms & process ─────────────────────────
+OTC.PLATFORMS = {
+  pcm_sin: {
+    name: "Sb₂Se₃ phase-change film on SiN slab", short: "PCM on SiN",
+    n0: 1.80, dn: 0.03, lossDbCm: 1.0, wgLevel: 0.5, levels: 256, ld: 0.15, writeNm: 532,
+    rewritable: true, volatile: false,
+    stack: ["Si wafer", "4 µm thermal SiO₂", "300 nm LPCVD Si₃N₄ (unpatterned slab)", "20 nm Sb₂Se₃ (sputtered, amorphous as deposited)", "10 nm SiO₂ cap (ALD or sputter)"],
+    write: "Crystallize (raise index) by heating above ≈200 °C with the projected light; graded dose gives partial crystallization = analog weight level.",
+    erase: "Re-amorphize with a short (ns) melt-quench pulse pattern, or flood-erase the die.",
+    notes: "Effective-index contrast of the 20 nm film on 300 nm SiN is an estimate; verify with a mode solver for your stack. Sb₂Se₃ data: Delaney et al., Adv. Funct. Mater. 2020.",
+  },
+  polymer: {
+    name: "Holographic photopolymer film (write once)", short: "Photopolymer",
+    n0: 1.50, dn: 0.02, lossDbCm: 0.5, wgLevel: 0.5, levels: 256, ld: 0.2, writeNm: 532,
+    rewritable: false, volatile: false,
+    stack: ["Glass or Si/SiO₂ substrate", "5 µm low-index cladding", "15 µm holographic photopolymer (laminated or spin-coated)", "Protective cover film"],
+    write: "One exposure polymerizes the pattern; a UV flood then fixes it. Weights are permanent, so this makes an inference ASIC printed by light.",
+    erase: "Not erasable. Print a new die for new weights.",
+    notes: "Index modulation of commercial holographic photopolymers is up to ≈0.03.",
+  },
+  ln_fe: {
+    name: "LiNbO₃:Fe photorefractive crystal", short: "LiNbO₃:Fe",
+    n0: 2.14, dn: 5e-4, lossDbCm: 0.2, wgLevel: 0.5, levels: 64, ld: 0.3, writeNm: 532,
+    rewritable: true, volatile: false,
+    stack: ["Z-cut LiNbO₃:Fe wafer (polished)", "Optional SiO₂ buffer and electrodes for electro-optic inputs"],
+    write: "Photorefractive index change; can be thermally fixed for months of retention.",
+    erase: "Uniform illumination plus heating.",
+    notes: "Very weak contrast, so devices are cm-scale. It is included to show the scaling limit.",
+  },
+  sbn: {
+    name: "SBN:61 photorefractive crystal (biased)", short: "SBN:61",
+    n0: 2.30, dn: 1e-3, lossDbCm: 0.5, wgLevel: 0.5, levels: 64, ld: 0.5, writeNm: 532,
+    rewritable: true, volatile: true,
+    stack: ["SBN:61 crystal with bias electrodes (1–3 kV/cm)"],
+    write: "Photorefractive index change under bias field.",
+    erase: "Uniform light; decays in the dark over hours.",
+    notes: "Volatile and research-grade.",
+  },
+};
+OTC.PROCESS_DEFAULT = {
+  plate: "lcos", frames: 8, projNA: 0.4, drift: 0.01,
+  lcos: { pixels: [4160, 2464], pitch_um: 3.74, levels: 256, name: "LCoS phase SLM (4K class)" },
+  dmd: { pixels: [2560, 1600], pitch_um: 7.56, levels: 256, name: "DMD (binary mirrors, 8-bit gray by PWM)" },
+  exposure_s: 0.5, settle_s: 0.3,
+};
+// speckle on the written index for each plate technology (relative rms on Δn)
+OTC.speckle = proc => proc.plate === "dmd" ? 0.01 : 0.075 / Math.sqrt(Math.max(1, proc.frames));
+
+// ───────────────────────── BPM cell engine (2-D scalar, paraxial, split-step) ─────────────────────────
+const NX = 256, fftX = makeFFT(NX);
+function makeProf(w, sig, dx) {
+  const h = Math.min(dx / 8, 0.02), U = w / 2 + 6 * sig + 2 * dx, N = Math.ceil(2 * U / h) + 1, t = new Float64Array(N), s2 = Math.SQRT2 * Math.max(sig, 1e-3);
+  for (let i = 0; i < N; i++) { const u = -U + i * h; t[i] = 0.5 * (erf((u + w / 2) / s2) - erf((u - w / 2) / s2)); }
+  return u => (u <= -U || u >= U) ? 0 : t[Math.round((u + U) / h)];
+}
+function dnRow(g, centers, z, nz, out, aout) {
+  const c = g.cfg;
+  for (let j = 0; j < NX; j++) {
+    let s = 0; for (const xc of centers) s += g.prof(g.xs[j] - xc);
+    if (s > 1) s = 1;
+    let d = c.dn * c.lvl * s;
+    if (nz) d *= 1 + nz(g.xs[j], z);
+    out[j] = d; if (aout) aout[j] = 0;
+  }
+}
+function makeNoise(c, seed, dz, dx) {
+  if (!seed) return null;
+  const lf = Math.max(c.ellF, dx), lz = Math.max(c.ellF, dz), sf = c.sigF * Math.sqrt(c.ellF / lz), ss = c.sigS, ls = c.ellS;
+  const grid = (l, lzz, sd) => {
+    let rA = null, kA = null, rB = null, kB = null;
+    const row = k => { if (k === kA) return rA; if (k === kB) return rB; const r = new Map(); rB = rA; kB = kA; rA = r; kA = k; return r; };
+    const val = (r, k, i) => { let v = r.get(i); if (v === undefined) { v = gl(i, k, sd); r.set(i, v); } return v; };
+    return (x, z) => { const fx = x / l, fz = z / lzz, ix = Math.floor(fx), iz = Math.floor(fz), tx = fx - ix, tz = fz - iz, r0 = row(iz), r1 = row(iz + 1);
+      return (1 - tz) * ((1 - tx) * val(r0, iz, ix) + tx * val(r0, iz, ix + 1)) + tz * ((1 - tx) * val(r1, iz + 1, ix) + tx * val(r1, iz + 1, ix + 1)); };
+  };
+  const gf = grid(lf, lz, seed), gs = grid(ls, ls, seed + 7919);
+  return (x, z) => 1.5 * (sf * gf(x, z) + ss * gs(x, z));
+}
+function makePath(secs) {
+  const segs = []; let z = 0;
+  for (const s of secs) { segs.push({ z0: z, z1: z + s.L, a: s.a, b: s.b }); z += s.L; }
+  let idx = 0;
+  return { L: z, sep(q) { if (q < segs[idx].z0) idx = 0; while (idx < segs.length - 1 && q > segs[idx].z1) idx++; const s = segs[idx]; if (s.a === s.b) return s.a; const t = Math.min(1, Math.max(0, (q - s.z0) / (s.z1 - s.z0))); return s.a + (s.b - s.a) * (1 - Math.cos(PI * t)) / 2; } };
+}
+function bpm(g, path, fields, z0, z1, nz, centersFn) {
+  const c = g.cfg, steps = Math.max(1, Math.round((z1 - z0) / g.dz)), dz = (z1 - z0) / steps, k0 = TAU / g.lam;
+  const pc = new Float64Array(NX), ps = new Float64Array(NX);
+  for (let m = 0; m < NX; m++) { const mm = m < NX / 2 ? m : m - NX, kx = TAU * mm / g.X, ph = -kx * kx * dz / (2 * k0 * c.n0); pc[m] = Math.cos(ph); ps[m] = Math.sin(ph); }
+  const aBg = c.lossDbCm / 4.343 / 1e4, dn = new Float64Array(NX), mc = new Float64Array(NX), ms = new Float64Array(NX), mk = new Float64Array(NX);
+  for (let j = 0; j < NX; j++) mk[j] = Math.exp(-0.03 * dz * g.mask[j]);
+  for (let s = 0; s < steps; s++) {
+    const z = z0 + (s + 0.5) * dz, sep = path.sep(z);
+    dnRow(g, centersFn ? centersFn(sep) : [sep / 2, -sep / 2], z, nz, dn);
+    for (let j = 0; j < NX; j++) { const ph = k0 * dn[j] * dz / 2, a = Math.sqrt(Math.exp(-aBg * dz / 2) * mk[j]); mc[j] = a * Math.cos(ph); ms[j] = a * Math.sin(ph); }
+    for (const f of fields) {
+      const re = f.re, im = f.im;
+      for (let j = 0; j < NX; j++) { const r = re[j], i = im[j]; re[j] = r * mc[j] - i * ms[j]; im[j] = r * ms[j] + i * mc[j]; }
+      fftX(re, im, false);
+      for (let m = 0; m < NX; m++) { const r = re[m], i = im[m]; re[m] = r * pc[m] - i * ps[m]; im[m] = r * ps[m] + i * pc[m]; }
+      fftX(re, im, true);
+      for (let j = 0; j < NX; j++) { const r = re[j], i = im[j]; re[j] = r * mc[j] - i * ms[j]; im[j] = r * ms[j] + i * mc[j]; }
+    }
+  }
+}
+const fieldFrom = f => ({ re: Float64Array.from(f), im: new Float64Array(NX) });
+const overlap = (f, m, dx) => { let r = 0, i = 0; for (let j = 0; j < NX; j++) { r += f.re[j] * m[j]; i += f.im[j] * m[j]; } return [r * dx, i * dx]; };
+function solveModes(dn, n0, dx, count, k0) {
+  const n = dn.length, inv = 1 / (dx * dx), e2 = inv * inv, d = new Float64Array(n);
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) { const nn = n0 + dn[i]; d[i] = -2 * inv + k0 * k0 * nn * nn; lo = Math.min(lo, d[i]); hi = Math.max(hi, d[i]); }
+  lo -= 2 * inv; hi += 2 * inv;
+  const cnt = lam => { let c = 0, q = d[0] - lam; if (q < 0) c++; for (let i = 1; i < n; i++) { q = d[i] - lam - e2 / (q === 0 ? 1e-300 : q); if (q < 0) c++; } return c; };
+  const out = [];
+  for (let k = 0; k < count; k++) {
+    let a = lo, b = hi; for (let it = 0; it < 90; it++) { const m = (a + b) / 2; if (cnt(m) > n - 1 - k) b = m; else a = m; }
+    const lam = (a + b) / 2, mu = lam + 1e-9 * Math.abs(lam); let y = new Float64Array(n).fill(1);
+    for (let it = 0; it < 4; it++) {
+      const c = new Float64Array(n), r = new Float64Array(n); let bb = d[0] - mu; c[0] = inv / bb; r[0] = y[0] / bb;
+      for (let i = 1; i < n; i++) { bb = d[i] - mu - inv * c[i - 1]; c[i] = inv / bb; r[i] = (y[i] - inv * r[i - 1]) / bb; }
+      const x = new Float64Array(n); x[n - 1] = r[n - 1]; for (let i = n - 2; i >= 0; i--) x[i] = r[i] - c[i] * x[i + 1];
+      let s = 0; for (let i = 0; i < n; i++) s += x[i] * x[i]; s = Math.sqrt(s * dx); for (let i = 0; i < n; i++) x[i] /= s; y = x;
+    }
+    let mi = 0; for (let i = 0; i < n; i++) if (Math.abs(y[i]) > Math.abs(y[mi])) mi = i; if (y[mi] < 0) for (let i = 0; i < n; i++) y[i] = -y[i];
+    out.push({ beta: Math.sqrt(lam), f: y });
+  }
+  return out;
+}
+function refineMode(g, centers, f0) {
+  const k0 = TAU / g.lam, n0 = g.cfg.n0, dn = new Float64Array(NX); dnRow(g, centers, 0, null, dn);
+  const tau = g.dz, pk = new Float64Array(NX), pd = new Float64Array(NX); let dmax = 0; for (let j = 0; j < NX; j++) dmax = Math.max(dmax, dn[j]);
+  for (let m = 0; m < NX; m++) { const mm = m < NX / 2 ? m : m - NX, kx = TAU * mm / g.X; pk[m] = Math.exp(-kx * kx * tau / (2 * k0 * n0)); }
+  for (let j = 0; j < NX; j++) pd[j] = Math.exp(k0 * (dn[j] - dmax) * tau / 2);
+  const re = Float64Array.from(f0), im = new Float64Array(NX);
+  for (let it = 0; it < 700; it++) {
+    for (let j = 0; j < NX; j++) { re[j] *= pd[j]; im[j] = 0; }
+    fftX(re, im, false); for (let m = 0; m < NX; m++) { re[m] *= pk[m]; im[m] *= pk[m]; } fftX(re, im, true);
+    for (let j = 0; j < NX; j++) re[j] *= pd[j];
+    let s = 0; for (let j = 0; j < NX; j++) s += re[j] * re[j]; s = Math.sqrt(s * g.dx); for (let j = 0; j < NX; j++) re[j] /= s;
+  }
+  return re;
+}
+function bendLoss(g, R) {     // dB/cm, by BPM in the conformally mapped bend n(x)(1 + x/R)
+  const c = g.cfg, k0 = TAU / g.lam, L = Math.min(4000, PI * R), steps = Math.max(60, Math.round(L / g.dz)), dz = L / steps;
+  const pc = new Float64Array(NX), ps = new Float64Array(NX);
+  for (let m = 0; m < NX; m++) { const mm = m < NX / 2 ? m : m - NX, kx = TAU * mm / g.X, ph = -kx * kx * dz / (2 * k0 * c.n0); pc[m] = Math.cos(ph); ps[m] = Math.sin(ph); }
+  const dn = new Float64Array(NX); dnRow(g, [0], 0, null, dn);
+  const m0 = refineMode(g, [0], solveModes(dn, c.n0, g.dx, 1, k0)[0].f), f = fieldFrom(m0);
+  const mc = new Float64Array(NX), ms = new Float64Array(NX);
+  for (let j = 0; j < NX; j++) { const nb = isFinite(R) ? (c.n0 + dn[j]) * (1 + g.xs[j] / R) - c.n0 : dn[j], a = Math.sqrt(Math.exp(-0.03 * dz * g.mask[j])); mc[j] = a * Math.cos(k0 * nb * dz / 2); ms[j] = a * Math.sin(k0 * nb * dz / 2); }
+  const Ps = [];
+  for (let s = 0; s < steps; s++) {
+    for (let j = 0; j < NX; j++) { const r = f.re[j], i = f.im[j]; f.re[j] = r * mc[j] - i * ms[j]; f.im[j] = r * ms[j] + i * mc[j]; }
+    fftX(f.re, f.im, false); for (let m = 0; m < NX; m++) { const r = f.re[m], i = f.im[m]; f.re[m] = r * pc[m] - i * ps[m]; f.im[m] = r * ps[m] + i * pc[m]; } fftX(f.re, f.im, true);
+    for (let j = 0; j < NX; j++) { const r = f.re[j], i = f.im[j]; f.re[j] = r * mc[j] - i * ms[j]; f.im[j] = r * ms[j] + i * mc[j]; }
+    let P = 0; for (let j = 0; j < NX; j++) if (Math.abs(g.xs[j]) < 2.5 * g.w) P += f.re[j] ** 2 + f.im[j] ** 2; Ps.push(P);
+  }
+  const sa = Math.floor(steps * 0.15), Pa = Ps[sa]; if (!(Pa > 1e-8)) return 1000;
+  let sb = steps - 1; for (let s = sa + 1; s < steps; s++) if (Ps[s] < 0.01 * Pa) { sb = s; break; }
+  return Math.min(1000, Math.max(0, Math.log(Pa / Ps[sb]) / ((sb - sa) * dz)) * 4.343e4);
+}
+
+// Design the MZI cell for a platform + process. Returns geometry and BPM handles.
+OTC.designCell = function (platKey, proc, lam = 1.55, opt = {}) {
+  const P = OTC.PLATFORMS[platKey], k0 = TAU / lam;
+  const sPsf = 0.217 * (P.writeNm / 1000) / proc.projNA, blur = Math.sqrt(sPsf * sPsf + P.ld * P.ld);
+  const cfg = { n0: P.n0, dn: P.dn, lvl: P.wgLevel, lossDbCm: P.lossDbCm, blur, sigF: OTC.speckle(proc) * (sPsf / blur), ellF: 2.355 * blur, sigS: proc.drift, ellS: 500 };
+  const adn = Math.abs(P.dn) * P.wgLevel, NA = Math.sqrt(2 * P.n0 * adn), w = 0.8 * PI / (k0 * NA);
+  const g = { platKey, P, cfg, lam, w, NA, adn, sPsf };
+  g.gap = w; g.sc = 2 * w; g.D = 5 * w;                       // lane pitch = MZI arm separation
+  g.X = g.D + 12 * w + 16 * blur; g.dx = g.X / NX;
+  g.dz = Math.min(10, 0.03 / (k0 * Math.abs(P.dn)));
+  g.xs = new Float64Array(NX); for (let j = 0; j < NX; j++) g.xs[j] = -g.X / 2 + (j + 0.5) * g.dx;
+  g.mask = new Float64Array(NX); const xb = 0.8 * g.X / 2;
+  for (let j = 0; j < NX; j++) { const ax = Math.abs(g.xs[j]); g.mask[j] = ax < xb ? 0 : ((ax - xb) / (g.X / 2 - xb)) ** 2; }
+  g.prof = makeProf(w, blur, g.dx);
+  const dn = new Float64Array(NX);
+  dnRow(g, [g.D / 2], 0, null, dn);
+  const mU = solveModes(dn, P.n0, g.dx, 1, k0)[0];
+  g.neff = mU.beta / k0; g.modeU = refineMode(g, [g.D / 2], mU.f); g.modeL = Float64Array.from(g.modeU).reverse();
+  dnRow(g, [g.sc / 2, -g.sc / 2], 0, null, dn);
+  const sm = solveModes(dn, P.n0, g.dx, 2, k0); g.Lc = PI / (sm[0].beta - sm[1].beta);
+  // bends: bend loss curve → minimum radius for 0.1 dB/cm; S-bends must respect both slope and radius
+  const base = bendLoss(g, Infinity); g.bend = [];
+  let R = 25 * g.X;
+  for (let k = 0; k < 14; k++) { const t = Math.max(1e-6, bendLoss(g, R) - base); g.bend.push({ R, dBcm: t }); if (t < 0.01 && k > 2) break; R *= 1.5; }
+  const use = g.bend.filter(p => p.dBcm > 0.02 && p.dBcm < 30);
+  let A = 0, Bf = 0; if (use.length >= 2) { const n = use.length; let sx = 0, sy = 0, sxx = 0, sxy = 0; for (const p of use) { const y = Math.log(p.dBcm); sx += p.R; sy += y; sxx += p.R * p.R; sxy += p.R * y; } Bf = (n * sxy - sx * sy) / (n * sxx - sx * sx); A = (sy - Bf * sx) / n; }
+  g.Rmin = use.length >= 2 ? (Math.log(0.1) - A) / Bf : g.bend[g.bend.length - 1].R;
+  g.bendAt = Rq => use.length >= 2 ? Math.exp(A + Bf * Rq) : 0;
+  const off = (g.D - g.sc) / 2, thmax = 0.15 * NA / P.n0;
+  g.Ls = Math.max(PI * off / (2 * thmax), PI * Math.sqrt(g.Rmin * off / 2));
+  g.Lin = Math.max(20, 10 * w);
+  // calibrate 50:50 couplers (bends included, noise off)
+  g.L50 = g.Lc / 2;
+  const cpl = L => [{ L: g.Lin, a: g.D, b: g.D }, { L: g.Ls, a: g.D, b: g.sc }, { L, a: g.sc, b: g.sc }, { L: g.Ls, a: g.sc, b: g.D }, { L: g.Lin, a: g.D, b: g.D }];
+  for (let it = 0; it < 3; it++) {
+    const path = makePath(cpl(g.L50)), f = fieldFrom(g.modeU); bpm(g, path, [f], 0, path.L, null);
+    const u = overlap(f, g.modeU, g.dx), l = overlap(f, g.modeL, g.dx), Pu = C.abs2(u), Pl = C.abs2(l);
+    const thm = Math.asin(Math.sqrt(Pl / (Pu + Pl))), Cc = PI / (2 * g.Lc), thb = thm - Cc * g.L50;
+    g.L50 = Math.max(0, (PI / 4 - thb) / Cc); g.split = Pl / (Pu + Pl);
+  }
+  // weight patches: 2π of phase from the headroom above the waveguide level
+  g.dnW = Math.abs(P.dn) * (1 - P.wgLevel); g.Lp = lam / (g.dnW * 0.9);
+  g.margin = Math.max(5, 4 * w);
+  g.Lphi = g.Lp + 2 * g.margin; g.La = g.Lp + 2 * g.margin;
+  g.secs = [{ L: g.Lphi, a: g.D, b: g.D }, { L: g.Ls, a: g.D, b: g.sc }, { L: g.L50, a: g.sc, b: g.sc }, { L: g.Ls, a: g.sc, b: g.D }, { L: g.La, a: g.D, b: g.D }, { L: g.Ls, a: g.D, b: g.sc }, { L: g.L50, a: g.sc, b: g.sc }, { L: g.Ls, a: g.sc, b: g.D }];
+  g.Lcell = g.secs.reduce((a, s) => a + s.L, 0);
+  g.zArm = g.Lphi + 2 * g.Ls + g.L50 + g.La;
+  // process centering: written MZIs come out over-coupled (speckle, blur and weak arm-to-arm coupling).
+  // Measure test MZIs written with the real process and correct the coupler length so the mean α is π/4.
+  g.centering = [];
+  const setL = L => { g.L50 = L; g.secs[2].L = L; g.secs[6].L = L; g.Lcell = g.secs.reduce((a, s) => a + s.L, 0); g.zArm = g.Lphi + 2 * g.Ls + g.L50 + g.La; };
+  if (opt.center !== false) {
+    let am = 0; const seeds = [11, 23, 37];
+    for (const sd of seeds) { const r = OTC.realizeMZI(g, 9000 + sd * 13); am += (r.a1 + r.a2) / 2; }
+    am /= seeds.length; g.centering.push({ L50: g.L50, alphaMean: am });
+    setL(Math.max(0, g.L50 + (PI / 4 - am) / (PI / (2 * g.Lc))));
+  }
+  return g;
+};
+// One noisy realization of the MZI cell → extracted coupler angles, arm-phase offset, loss.
+OTC.realizeMZI = function (g, seed) {
+  const path = makePath(g.secs), nz = makeNoise(g.cfg, seed, g.dz, g.dx);
+  const f1 = fieldFrom(g.modeU), f2 = fieldFrom(g.modeL);
+  bpm(g, path, [f1, f2], 0, g.zArm, nz);
+  const half = (f, up) => { const o = { re: new Float64Array(NX), im: new Float64Array(NX) }; for (let j = 0; j < NX; j++) if ((g.xs[j] > 0) === up) { o.re[j] = f.re[j]; o.im[j] = f.im[j]; } return o; };
+  const F = [half(f1, true), half(f1, false), half(f2, true), half(f2, false)];
+  bpm(g, path, F, g.zArm, path.L, nz);
+  const ov = f => [overlap(f, g.modeU, g.dx), overlap(f, g.modeL, g.dx)];
+  const a = [ov(F[0]), ov(F[2])], b = [ov(F[1]), ov(F[3])];          // a[p][o]: input p, output o, via upper arm
+  const A = [[a[0][0], a[1][0]], [a[0][1], a[1][1]]], B = [[b[0][0], b[1][0]], [b[0][1], b[1][1]]];
+  const o = C.abs2(A[0][0]) + C.abs2(A[0][1]) > C.abs2(A[1][0]) + C.abs2(A[1][1]) ? 0 : 1;
+  const a1 = Math.acos(Math.min(1, Math.sqrt(C.abs2(A[o][0]) / (C.abs2(A[o][0]) + C.abs2(A[o][1])))));
+  const p = C.abs2(A[0][0]) + C.abs2(A[1][0]) > C.abs2(A[0][1]) + C.abs2(A[1][1]) ? 0 : 1;
+  const a2 = Math.acos(Math.min(1, Math.sqrt(C.abs2(A[0][p]) / (C.abs2(A[0][p]) + C.abs2(A[1][p])))));
+  const dth = C.arg(B[1][0]) - C.arg(A[1][0]);
+  const e = C.exp(dth), M00 = C.add(C.mul(e, A[0][0]), B[0][0]), M10 = C.add(C.mul(e, A[1][0]), B[1][0]);
+  const tot = C.abs2(M00) + C.abs2(M10);
+  return { a1, a2, dth: Math.atan2(Math.sin(dth), Math.cos(dth)), IL: -10 * Math.log10(tot), erCross: 10 * Math.log10(C.abs2(M10) / Math.max(1e-15, C.abs2(M00))) };
+};
+// Port-phase noise between devices from the written-index statistics (rad rms over one cell length).
+OTC.portPhaseSigma = g => { const c = g.cfg, k0 = TAU / g.lam; return k0 * 0.9 * g.adn * Math.sqrt(c.sigF ** 2 * c.ellF * g.Lcell + c.sigS ** 2 * c.ellS * g.Lcell); };
+
+// ───────────────────────── program + simulate a tensor core ─────────────────────────
+// pipeline: array of block types from {fanin, meshV, sigma, meshU, mesh, phase, fanout}
+OTC.programCore = function (core, N) {
+  const W = OTC.weights(core.weights, N), types = core.pipeline;
+  const hasV = types.includes("meshV"), hasU = types.includes("meshU"), hasS = types.includes("sigma");
+  const out = { N, W, mode: "", blocks: {} };
+  if (hasV && hasU && hasS) {
+    const { U, S, V } = svd(W), smax = Math.max(...S) || 1;
+    // degenerate singular values (e.g. unitary W): the SVD is not unique. Rotate each degenerate block by a random
+    // orthogonal Q (U→UQ, V→VQ leaves W unchanged) so no MZI sits at an exact bar/cross state that imperfect
+    // couplers cannot reach.
+    const rr = rng(4242), used = new Array(N).fill(false);
+    for (let i = 0; i < N; i++) {
+      if (used[i]) continue; const cl = [i]; used[i] = true;
+      for (let j = i + 1; j < N; j++) if (!used[j] && Math.abs(S[j] - S[i]) < 1e-9 * smax) { cl.push(j); used[j] = true; }
+      if (cl.length < 2) continue;
+      const m = cl.length, Q = Array.from({ length: m }, () => Array.from({ length: m }, () => gaussR(rr)));
+      for (let c = 0; c < m; c++) { for (let d = 0; d < c; d++) { let dot = 0; for (let t = 0; t < m; t++) dot += Q[t][c] * Q[t][d]; for (let t = 0; t < m; t++) Q[t][c] -= dot * Q[t][d]; } let nn = 0; for (let t = 0; t < m; t++) nn += Q[t][c] ** 2; nn = Math.sqrt(nn); for (let t = 0; t < m; t++) Q[t][c] /= nn; }
+      for (const X of [U, V]) for (let row = 0; row < N; row++) { const old = cl.map(c => X[row][c]); cl.forEach((c, ci) => { let v = 0; for (let t = 0; t < m; t++) v += old[t] * Q[t][ci]; X[row][c] = v; }); }
+    }
+    const Vt = V[0].map((_, j) => V.map(r => r[j]));
+    out.scale = smax; out.S = S.map(s => s / smax);
+    out.blocks.meshV = clements(M.fromReal(Vt));
+    out.blocks.meshU = clements(M.fromReal(U));
+    out.mode = "arbitrary (SVD: W = U·Σ·Vᵀ)";
+    out.target = W.map(r => r.map(v => v / smax));
+  } else if (hasU || types.includes("mesh")) {
+    // closest unitary (polar decomposition) if W is not unitary
+    const { U, V } = svd(W); const Q = U.map((r, i) => V.map((_, j) => r.reduce((a, _, k) => a + U[i][k] * V[j][k], 0)));
+    out.blocks.meshU = clements(M.fromReal(Q)); out.scale = 1; out.S = new Array(N).fill(1);
+    out.mode = "unitary only (no Σ block): the closest unitary to W is used"; out.target = Q;
+  } else { out.mode = "diagonal only"; out.S = W.map((r, i) => Math.abs(r[i])); out.scale = Math.max(...out.S) || 1; out.S = out.S.map(s => s / out.scale); out.target = W.map((r, i) => r.map((v, j) => (i === j ? v / out.scale : 0))); }
+  return out;
+};
+// Hardware-aware programming of one MZI (measured couplers a1, a2): find (θ', φ') so that the real block,
+// fed with inputs that carry phase debts p, equals diag(e^{iq})·T_ideal. Returns new output debts q.
+function fitMZI(Tid, p0, p1, a1, a2) {
+  const tgt0 = C.abs(Tid[0][0]), tgt1 = C.abs(Tid[1][0]);
+  const magErr = t => { const R = mziT(t, 0, a1, a2, 1); return Math.abs(C.abs(R[0][0]) - tgt0) + Math.abs(C.abs(R[1][0]) - tgt1); };
+  const golden = (f, a, b) => { const gr = 0.6180339887; let c = b - gr * (b - a), d = a + gr * (b - a); for (let i = 0; i < 40; i++) { if (f(c) < f(d)) b = d; else a = c; c = b - gr * (b - a); d = a + gr * (b - a); } return (a + b) / 2; };
+  let bt = 0, be = Infinity; for (let k = 0; k < 256; k++) { const t = TAU * k / 256, e = magErr(t); if (e < be) { be = e; bt = t; } }
+  const th = golden(magErr, bt - TAU / 256, bt + TAU / 256);
+  const ep = [C.exp(p0), C.exp(p1)];
+  const fitCost = ph => {
+    const R = mziT(th, ph, a1, a2, 1); let cost = 0; const q = [];
+    for (let r = 0; r < 2; r++) {
+      const Rr = [C.mul(R[r][0], ep[0]), C.mul(R[r][1], ep[1])];
+      const qq = C.arg(C.add(C.mul(Rr[0], C.conj(Tid[r][0])), C.mul(Rr[1], C.conj(Tid[r][1])))); q.push(qq);
+      const e = C.exp(qq); for (let c = 0; c < 2; c++) cost += C.abs2(C.sub(Rr[c], C.mul(e, Tid[r][c])));
+    }
+    return { cost, q };
+  };
+  let bp = 0, bc = Infinity; for (let k = 0; k < 128; k++) { const ph = TAU * k / 128, c = fitCost(ph).cost; if (c < bc) { bc = c; bp = ph; } }
+  const ph = golden(p => fitCost(p).cost, bp - TAU / 128, bp + TAU / 128);
+  const q = fitCost(ph).q;
+  return { th: wrap(th), ph: wrap(ph), q0: q[0], q1: q[1] };
+}
+OTC.fitMZI = fitMZI;
+// Build the realized N×N complex transfer of a programmed core, given device statistics.
+//  uncalibrated: ideal phases written open-loop (quantized), devices carry their BPM-measured errors + port phase noise
+//  calibrated:   every MZI measured; hardware-aware phases (fitMZI) written closed-loop; residual = level quantization
+OTC.realizeCore = function (prog, stats, opt) {
+  const N = prog.N, r = rng(opt.seed || 1), cal = opt.calibrated, levels = opt.levels || 256;
+  const qStep = TAU / levels, sigRes = 0.003, sigPort = stats.portSigma;
+  const q = p => Math.round(wrap(p) / qStep) * qStep;
+  let k = 0; const debt = new Array(N).fill(0);
+  const T = M.eye(N);
+  const pick = () => stats.pool[(k++) % stats.pool.length];
+  const write = (th, ph) => [q(th) + sigRes * gaussR(r), q(ph) + sigRes * gaussR(r)];
+  const mzi = z => {
+    const d = pick(), g = Math.pow(10, -d.IL / 20); let th, ph;
+    if (cal) { const f = fitMZI(mziT(z.theta, z.phi), debt[z.m], debt[z.m + 1], d.a1, d.a2); [th, ph] = write(f.th, f.ph); debt[z.m] = f.q0; debt[z.m + 1] = f.q1; }
+    else { [th, ph] = write(z.theta, z.phi); th += d.dth + sigPort * gaussR(r); ph += sigPort * gaussR(r); }
+    leftApply(T, z.m, mziT(th, ph, d.a1, d.a2, g));
+  };
+  // pass-through lanes in each mesh column are waveguides of the same length: same material loss, own phase noise
+  const gPass = Math.pow(10, -(stats.passIL || 0) / 20);
+  const mesh = blk => {
+    const byCol = Array.from({ length: blk.depth }, () => []); for (const z of blk.mzis) byCol[z.col].push(z);
+    for (const col of byCol) {
+      const used = new Set(); for (const z of col) { mzi(z); used.add(z.m); used.add(z.m + 1); }
+      for (let i = 0; i < N; i++) if (!used.has(i)) { const f = C.scale(C.exp(cal ? 0 : sigPort * gaussR(r)), gPass); for (let j = 0; j < N; j++) T[i][j] = C.mul(f, T[i][j]); }
+    }
+  };
+  if (prog.blocks.meshV) {
+    mesh(prog.blocks.meshV);
+    const Dv = prog.blocks.meshV.D;
+    for (let i = 0; i < N; i++) {
+      const d = pick(), g = Math.pow(10, -d.IL / 20), s = Math.min(1, prog.S[i]);
+      let th, ph;
+      if (cal) {
+        let bt = 0, be = Infinity; for (let kk = 0; kk < 1024; kk++) { const t = TAU * kk / 1024, e = Math.abs(C.abs(mziT(t, 0, d.a1, d.a2, 1)[0][0]) - s); if (e < be) { be = e; bt = t; } }
+        th = bt; const R00 = mziT(th, 0, d.a1, d.a2, 1)[0][0];
+        ph = C.arg(Dv[i]) - C.arg(R00) - debt[i]; debt[i] = 0;          // phase of R00 ∝ e^{iφ}: cancel the debt here
+        [th, ph] = write(th, ph);
+      } else { th = 2 * Math.asin(s); ph = -PI / 2 - th / 2 + C.arg(Dv[i]); [th, ph] = write(th, ph); th += d.dth + sigPort * gaussR(r); ph += sigPort * gaussR(r); }
+      const b = mziT(th, ph, d.a1, d.a2, g);
+      for (let j = 0; j < N; j++) T[i][j] = C.mul(b[0][0], T[i][j]);
+    }
+  }
+  if (prog.blocks.meshU) mesh(prog.blocks.meshU);
+  // coherent detection: LO phase per output. Calibrated: fitted against the target (digital per-channel gain as well).
+  const Du = prog.blocks.meshU ? prog.blocks.meshU.D : new Array(N).fill([1, 0]);
+  const tgt = prog.target, lo = [], gain = [];
+  for (let i = 0; i < N; i++) {
+    let psi = -C.arg(Du[i]), gn = 1;      // output = D_U·(mesh); LO multiplies by e^{-iψ}
+    if (cal) { let s = [0, 0], nn = 0; for (let j = 0; j < N; j++) { s = C.add(s, C.scale(T[i][j], tgt[i][j])); nn += tgt[i][j] ** 2; } psi = C.arg(s); const proj = C.abs(s); gn = proj > 1e-9 ? nn / proj : 1; }
+    lo.push(psi); gain.push(gn);
+  }
+  const Teff = T.map((row, i) => row.map(v => C.scale(C.mul(v, C.exp(-lo[i])), gain[i])));
+  return { T, Teff, lo, gain };
+};
+// Run vectors through a realized core with detector noise and converter quantization.
+OTC.runCore = function (prog, real, opt) {
+  const N = prog.N, r = rng((opt.seed || 1) + 99), S = opt.samples || 256, dac = opt.dacBits || 8, adc = opt.adcBits || 8, snr = opt.snrLin || 1e5;
+  const qz = (v, b) => { const L = Math.pow(2, b - 1) - 1; return Math.max(-1, Math.min(1, Math.round(v * L) / L)); };
+  // per-channel ADC full scale: 4σ of the expected output for uniform inputs, never more than the row's L1 norm
+  const FS = prog.target.map(row => { const l2 = Math.sqrt(row.reduce((a, v) => a + v * v, 0)), l1 = row.reduce((a, v) => a + Math.abs(v), 0); return Math.max(1e-6, Math.min(l1, 4 * l2 / Math.sqrt(3))); });
+  let e2 = 0, y2 = 0, ymax = 0; const errs = [], pairs = [];
+  for (let s = 0; s < S; s++) {
+    const x = Array.from({ length: N }, () => qz(2 * r() - 1, dac));
+    for (let i = 0; i < N; i++) {
+      let ideal = 0, c = [0, 0];
+      for (let j = 0; j < N; j++) { ideal += prog.target[i][j] * x[j]; c = C.add(c, C.scale(real.T[i][j], x[j])); }
+      let y = (c[0] * Math.cos(real.lo[i]) + c[1] * Math.sin(real.lo[i])) * real.gain[i];
+      y = FS[i] * qz(y / FS[i] + gaussR(r) / Math.sqrt(snr), adc);   // receiver noise and ADC at full scale FS[i]
+      const e = y - ideal; e2 += e * e; y2 += ideal * ideal; ymax = Math.max(ymax, Math.abs(ideal)); errs.push(e);
+      if (pairs.length < 600) pairs.push([ideal, y]);
+    }
+  }
+  const rmsE = Math.sqrt(e2 / (S * N)), rmsY = Math.sqrt(y2 / (S * N));
+  const snrDb = 20 * Math.log10(rmsY / rmsE);
+  return { rmsE, rmsY, snrDb, enob: (snrDb - 1.76) / 6.02, errs, pairs };
+};
+OTC.fidelity = (A, B) => {     // |Tr(A†B)|² / (Tr(A†A)·Tr(B†B))
+  let t = [0, 0], na = 0, nb = 0; const n = A.length;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { t = C.add(t, C.mul(C.conj(A[i][j]), B[i][j])); na += C.abs2(A[i][j]); nb += C.abs2(B[i][j]); }
+  return C.abs2(t) / (na * nb);
+};
+
+// ───────────────────────── system performance model ─────────────────────────
+OTC.performance = function (design, g, layout, accuracy) {
+  const s = design.system, N = design.N, K = design.cores.length, f = s.symbolRate_GHz * 1e9, lambdas = s.wavelengths || 1;
+  const macs = K * N * N * f * lambdas, ops = 2 * macs;
+  const nMziCore = design.cores.reduce((a, c) => a + (c.pipeline.includes("meshV") ? N * (N - 1) / 2 : 0) + (c.pipeline.includes("meshU") || c.pipeline.includes("mesh") ? N * (N - 1) / 2 : 0) + (c.pipeline.includes("sigma") ? N : 0), 0);
+  const e = s.energy_pJ, chans = K * N * lambdas;
+  const P = {
+    laser: K * s.laserPerCore_mW * 1e-3 * lambdas / s.wallPlug,
+    modulators: chans * e.modulator * 1e-12 * f,
+    dacs: chans * e.dac * 1e-12 * f,
+    receivers: chans * (e.tia + e.adc) * 1e-12 * f,
+    weights: 0,
+    thermal: s.tec_W,
+  };
+  const total = Object.values(P).reduce((a, b) => a + b, 0);
+  // silicon-photonics reference: same architecture, thermo-optic phase shifters hold the weights
+  const siWeights = nMziCore * 2 * s.si.Ppi_mW * 1e-3;     // mean phase π → mean power P_π per shifter, 2 shifters/MZI
+  const siTotal = total - P.weights + siWeights;
+  const siArea = nMziCore * s.si.mziArea_mm2;
+  return {
+    N, K, lambdas, macs, ops, P, total, topsW: ops / 1e12 / total, pJperMAC: total / macs * 1e12, nMzi: nMziCore,
+    si: { weights: siWeights, total: siTotal, topsW: ops / 1e12 / siTotal, area_mm2: siArea },
+    gpu: { name: s.gpuRef.name, topsW: s.gpuRef.tops / s.gpuRef.watts, tops: s.gpuRef.tops, watts: s.gpuRef.watts },
+    die: layout ? { W: layout.die.W / 1000, H: layout.die.H / 1000, area: layout.die.W * layout.die.H / 1e6 } : null,
+    latency_ns: layout ? layout.die.W * g.neff / 299.792458 / 1000 : NaN,
+    enob: accuracy ? accuracy.enob : NaN,
+  };
+};
+// SNR at the receiver for coherent (balanced homodyne, shot-noise-limited) detection
+OTC.receiverSNR = function (design, insertionLossDb) {
+  const s = design.system, N = design.N, B = s.symbolRate_GHz * 1e9 / 2;
+  const Ps = s.laserPerCore_mW * 1e-3 * Math.pow(10, -insertionLossDb / 10) / N;   // full-scale power per output
+  const R = 1.0, q = 1.602e-19, snr = 2 * R * Ps / (q * B);
+  return { Ps, snr, snrDb: 10 * Math.log10(snr) };
+};
+
+// ───────────────────────── layout compiler ─────────────────────────
+// Produces paths (center polylines, width, write level) and weight patches in die coordinates (µm).
+// x = propagation, y = transverse (down). Cores are stacked in y.
+OTC.compile = function (design, g, progs) {
+  const N = design.N, P = g.D, w = g.w, wl = g.P.wgLevel, fiberPitch = design.system.fiberPitch_um || 127;
+  const paths = [], patches = [], marks = [], blocks = [];
+  const lv = theta => wl + (1 - wl) * (wrap(theta) / TAU);
+  const rc = (x0, y0, L, dy, n = 24) => { const pts = []; for (let i = 0; i <= n; i++) { const t = i / n; pts.push([x0 + L * t, y0 + dy * (1 - Math.cos(PI * t)) / 2]); } return pts; };
+  const sLen = dy => Math.max(PI * Math.sqrt(g.Rmin * Math.abs(dy) / 2), 1);   // raised-cosine S-bend whose tightest radius equals Rmin
+  const coreH = Math.max(N * fiberPitch, (2 * N) * P) + 400;
+  const facetConv = Math.max(100, 30 * w);
+  let dieW = 0;
+  design.cores.forEach((core, ci) => {
+    const yc = ci * coreH + coreH / 2, lane = i => yc + (i - (N - 1) / 2) * P, fib = i => yc + (i - (N - 1) / 2) * fiberPitch;
+    let x = 200;  // edge margin
+    const prog = progs[ci];
+    for (const b of core.pipeline) {
+      const x0 = x;
+      if (b === "fanin" || b === "fanout") {
+        const dyMax = Math.abs(fib(0) - lane(0)), L = sLen(dyMax);
+        for (let i = 0; i < N; i++) {
+          const ya = b === "fanin" ? fib(i) : lane(i), yb = b === "fanin" ? lane(i) : fib(i);
+          if (b === "fanin") { // facet mode converter: written level ramps up from the facet
+            for (let s = 0; s < 4; s++) paths.push({ pts: [[x + s * facetConv / 4, ya], [x + (s + 1) * facetConv / 4, ya]], w, level: wl * (0.25 + 0.25 * s), kind: "converter" });
+            paths.push({ pts: rc(x + facetConv, ya, L, yb - ya), w, level: wl, kind: "fan" });
+          } else {
+            paths.push({ pts: rc(x, ya, L, yb - ya), w, level: wl, kind: "fan" });
+            for (let s = 0; s < 4; s++) paths.push({ pts: [[x + L + s * facetConv / 4, yb], [x + L + (s + 1) * facetConv / 4, yb]], w, level: wl * (1 - 0.25 * s), kind: "converter" });
+          }
+        }
+        x += L + facetConv;
+      } else if (b === "meshV" || b === "meshU" || b === "mesh") {
+        const blk = prog.blocks[b === "meshV" ? "meshV" : "meshU"];
+        const cols = blk.depth; const byCol = Array.from({ length: cols }, () => []);
+        for (const z of blk.mzis) byCol[z.col].push(z);
+        for (let c = 0; c < cols; c++) {
+          const xc = x + c * g.Lcell, used = new Set();
+          for (const z of byCol[c]) {
+            used.add(z.m); used.add(z.m + 1);
+            const yu = lane(z.m), yl = lane(z.m + 1), mid = (yu + yl) / 2, half = g.sc / 2;
+            for (const [y0, sign] of [[yu, 1], [yl, -1]]) {
+              const pts = [[xc, y0], [xc + g.Lphi, y0]];
+              let xx = xc + g.Lphi;
+              const yin = mid - sign * half;
+              pts.push(...rc(xx, y0, g.Ls, yin - y0).slice(1)); xx += g.Ls;
+              pts.push([xx + g.L50, yin]); xx += g.L50;
+              pts.push(...rc(xx, yin, g.Ls, y0 - yin).slice(1)); xx += g.Ls;
+              pts.push([xx + g.La, y0]); xx += g.La;
+              pts.push(...rc(xx, y0, g.Ls, yin - y0).slice(1)); xx += g.Ls;
+              pts.push([xx + g.L50, yin]); xx += g.L50;
+              pts.push(...rc(xx, yin, g.Ls, y0 - yin).slice(1));
+              paths.push({ pts, w, level: wl, kind: "mzi" });
+            }
+            patches.push({ x0: xc + g.margin, x1: xc + g.margin + g.Lp, y: yu, w, level: lv(z.phi), kind: "phi", core: ci, block: b, m: z.m, col: c, value: z.phi });
+            const xa = xc + g.Lphi + 2 * g.Ls + g.L50 + g.margin;
+            patches.push({ x0: xa, x1: xa + g.Lp, y: yu, w, level: lv(z.theta), kind: "theta", core: ci, block: b, m: z.m, col: c, value: z.theta });
+          }
+          for (let i = 0; i < N; i++) if (!used.has(i)) paths.push({ pts: [[xc, lane(i)], [xc + g.Lcell, lane(i)]], w, level: wl, kind: "pass" });
+        }
+        x += cols * g.Lcell;
+      } else if (b === "sigma") {
+        // spread lanes to 2P, MZI per lane against a dump guide, then gather back
+        const sp = i => yc + (i - (N - 1) / 2) * 2 * P, L = sLen(Math.abs(sp(0) - lane(0)));
+        for (let i = 0; i < N; i++) paths.push({ pts: rc(x, lane(i), L, sp(i) - lane(i)), w, level: wl, kind: "fan" });
+        const xm = x + L;
+        for (let i = 0; i < N; i++) {
+          const yu = sp(i), yl = sp(i) + P, mid = (yu + yl) / 2, half = g.sc / 2;
+          for (const [y0, sign, dump] of [[yu, 1, false], [yl, -1, true]]) {
+            const yin = mid - sign * half; let xx = xm + (dump ? g.Lphi : 0);
+            const pts = dump ? [[xx, y0]] : [[xm, y0], [xm + g.Lphi, y0]];
+            pts.push(...rc(xx, y0, g.Ls, yin - y0).slice(1)); xx += g.Ls; pts.push([xx + g.L50, yin]); xx += g.L50;
+            pts.push(...rc(xx, yin, g.Ls, y0 - yin).slice(1)); xx += g.Ls; pts.push([xx + g.La, y0]); xx += g.La;
+            pts.push(...rc(xx, y0, g.Ls, yin - y0).slice(1)); xx += g.Ls; pts.push([xx + g.L50, yin]); xx += g.L50;
+            pts.push(...rc(xx, yin, g.Ls, y0 - yin).slice(1)); xx += g.Ls;
+            paths.push({ pts, w, level: wl, kind: dump ? "dump" : "mzi" });
+            if (dump) for (let s = 0; s < 4; s++) paths.push({ pts: [[xx + s * 30, y0], [xx + (s + 1) * 30, y0]], w, level: wl * (0.75 - 0.2 * s), kind: "terminator" });
+          }
+          const s = Math.min(1, prog.S[i]), th = 2 * Math.asin(s), ph = -PI / 2 - th / 2 + (prog.blocks.meshV ? C.arg(prog.blocks.meshV.D[i]) : 0);
+          patches.push({ x0: xm + g.margin, x1: xm + g.margin + g.Lp, y: sp(i), w, level: lv(ph), kind: "phi", core: ci, block: "sigma", m: i, col: 0, value: wrap(ph) });
+          const xa = xm + g.Lphi + 2 * g.Ls + g.L50 + g.margin;
+          patches.push({ x0: xa, x1: xa + g.Lp, y: sp(i), w, level: lv(th), kind: "theta", core: ci, block: "sigma", m: i, col: 0, value: wrap(th) });
+        }
+        const xg = xm + g.Lcell + 120;
+        for (let i = 0; i < N; i++) { paths.push({ pts: [[xm + g.Lcell, sp(i)], [xg, sp(i)]], w, level: wl, kind: "pass" }); paths.push({ pts: rc(xg, sp(i), L, lane(i) - sp(i)), w, level: wl, kind: "fan" }); }
+        x = xg + L;
+      } else if (b === "phase") {
+        for (let i = 0; i < N; i++) { paths.push({ pts: [[x, lane(i)], [x + g.Lphi, lane(i)]], w, level: wl, kind: "pass" }); patches.push({ x0: x + g.margin, x1: x + g.margin + g.Lp, y: lane(i), w, level: wl, kind: "phi", core: ci, block: "phase", m: i, col: 0, value: 0 }); }
+        x += g.Lphi;
+      }
+      blocks.push({ core: ci, type: b, x0, x1: x, y0: yc - coreH / 2 + 100, y1: yc + coreH / 2 - 100 });
+    }
+    dieW = Math.max(dieW, x + 200);
+  });
+  const dieH = design.cores.length * coreH;
+  for (const [mx, my] of [[100, 100], [dieW - 100, 100], [100, dieH - 100], [dieW - 100, dieH - 100]]) marks.push({ x: mx, y: my, size: 60, arm: 4 });
+  return { paths, patches, marks, blocks, die: { W: dieW, H: dieH }, coreH, pixel: w / 4 };
+};
+
+// ───────────────────────── rasterizer, tiles, holograms ─────────────────────────
+OTC.tilePlan = function (layout, proc) {
+  const sl = proc.plate === "dmd" ? proc.dmd : proc.lcos, px = layout.pixel;
+  const tw = sl.pixels[0] * px, th = sl.pixels[1] * px;
+  const nx = Math.ceil(layout.die.W / tw), ny = Math.ceil(layout.die.H / th);
+  return { px, tw, th, nx, ny, count: nx * ny, slmPix: sl.pixels, demag: sl.pitch_um / px, slm: sl };
+};
+OTC.raster = function (layout, x0, y0, nx, ny, px) {      // returns Uint8Array (0..255 write dose)
+  const img = new Uint8Array(nx * ny), x1 = x0 + nx * px, y1 = y0 + ny * px;
+  const stamp = (ax, ay, bx, by, hw, v) => {
+    const minx = Math.max(x0, Math.min(ax, bx) - hw), maxx = Math.min(x1, Math.max(ax, bx) + hw), miny = Math.max(y0, Math.min(ay, by) - hw), maxy = Math.min(y1, Math.max(ay, by) + hw);
+    if (minx >= maxx || miny >= maxy) return;
+    const i0 = Math.floor((minx - x0) / px), i1 = Math.ceil((maxx - x0) / px), j0 = Math.floor((miny - y0) / px), j1 = Math.ceil((maxy - y0) / px);
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-12, hw2 = hw * hw;
+    for (let j = Math.max(0, j0); j < Math.min(ny, j1); j++) { const py = y0 + (j + 0.5) * px;
+      for (let i = Math.max(0, i0); i < Math.min(nx, i1); i++) { const pxx = x0 + (i + 0.5) * px;
+        let t = ((pxx - ax) * dx + (py - ay) * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const ex = ax + t * dx - pxx, ey = ay + t * dy - py;
+        if (ex * ex + ey * ey <= hw2) { const k = j * nx + i; if (v > img[k]) img[k] = v; } } }
+  };
+  for (const p of layout.paths) {
+    const v = Math.round(255 * p.level);
+    let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity; for (const q of p.pts) { bx0 = Math.min(bx0, q[0]); bx1 = Math.max(bx1, q[0]); by0 = Math.min(by0, q[1]); by1 = Math.max(by1, q[1]); }
+    if (bx1 < x0 - p.w || bx0 > x1 + p.w || by1 < y0 - p.w || by0 > y1 + p.w) continue;
+    for (let k = 1; k < p.pts.length; k++) stamp(p.pts[k - 1][0], p.pts[k - 1][1], p.pts[k][0], p.pts[k][1], p.w / 2, v);
+  }
+  for (const q of layout.patches) {
+    const v = Math.round(255 * q.level), ya = q.y - q.w / 2, yb = q.y + q.w / 2;
+    if (q.x1 < x0 || q.x0 > x1 || yb < y0 || ya > y1) continue;
+    for (let j = Math.max(0, Math.floor((ya - y0) / px)); j < Math.min(ny, Math.ceil((yb - y0) / px)); j++) for (let i = Math.max(0, Math.floor((q.x0 - x0) / px)); i < Math.min(nx, Math.ceil((q.x1 - x0) / px)); i++) img[j * nx + i] = v;
+  }
+  for (const m of layout.marks) { stamp(m.x - m.size, m.y, m.x + m.size, m.y, m.arm, 255); stamp(m.x, m.y - m.size, m.x, m.y + m.size, m.arm, 255); }
+  return img;
+};
+// Gerchberg–Saxton (noise-region variant) for a phase-only plate. target: Float64Array n×n (0..1), returns phase 0..2π and reconstruction.
+OTC.hologram = function (target, n, opt = {}) {
+  const fft = makeFFT(n), NN = n * n, iters = opt.iters || 25, levels = opt.levels || 256, fill = opt.fill || 1, r = rng(opt.seed || 7);
+  const f2 = (re, im, inv) => { for (let k = 0; k < n; k++) fft(re.subarray(k * n, (k + 1) * n), im.subarray(k * n, (k + 1) * n), inv); const tr = new Float64Array(n), ti = new Float64Array(n); for (let c = 0; c < n; c++) { for (let k = 0; k < n; k++) { tr[k] = re[k * n + c]; ti[k] = im[k * n + c]; } fft(tr, ti, inv); for (let k = 0; k < n; k++) { re[k * n + c] = tr[k]; im[k * n + c] = ti[k]; } } };
+  // target is placed in the centre "fill" fraction; the rest of the field is a free noise region
+  const tS = new Float64Array(NN), win = new Uint8Array(NN), sh = i => (i + n / 2) % n, o = Math.floor((1 - fill) * n / 2);
+  for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) { const ra = sh(a), cb = sh(b), p = a * n + b; win[p] = ra >= o && ra < n - o && cb >= o && cb < n - o ? 1 : 0; tS[p] = Math.sqrt(target[ra * n + cb]); }
+  let sT = 0; for (let p = 0; p < NN; p++) if (win[p]) sT += tS[p] * tS[p];
+  const re = new Float64Array(NN), im = new Float64Array(NN), phi = new Float64Array(NN), q = TAU / levels;
+  for (let p = 0; p < NN; p++) phi[p] = TAU * r();
+  for (let it = 0; it <= iters; it++) {
+    for (let p = 0; p < NN; p++) { re[p] = Math.cos(phi[p]); im[p] = Math.sin(phi[p]); }
+    f2(re, im, false); if (it === iters) break;
+    let pw = 0; for (let p = 0; p < NN; p++) if (win[p]) pw += re[p] * re[p] + im[p] * im[p];
+    const s = Math.sqrt(pw / (sT || 1));
+    for (let p = 0; p < NN; p++) if (win[p]) { const m = Math.hypot(re[p], im[p]) || 1e-30, a = s * tS[p]; re[p] = a * re[p] / m; im[p] = a * im[p] / m; }
+    f2(re, im, true);
+    for (let p = 0; p < NN; p++) { let a = Math.atan2(im[p], re[p]); if (a < 0) a += TAU; phi[p] = levels >= 256 ? a : (Math.round(a / q) % levels) * q; }
+  }
+  const I = new Float64Array(NN); for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) { const p = a * n + b; I[sh(a) * n + sh(b)] = re[p] * re[p] + im[p] * im[p]; }
+  // metrics
+  let sI = 0, sTb = 0, nB = 0; for (let p = 0; p < NN; p++) if (target[p] > 0.3) { sI += I[p]; sTb += target[p]; nB++; }
+  const scale = sI / (sTb || 1); let v = 0; for (let p = 0; p < NN; p++) if (target[p] > 0.3) { const e = I[p] / (scale * target[p]) - 1; v += e * e; }
+  return { phase: phi, I, sigma: nB ? Math.sqrt(v / nB) : 0, scale };
+};
+// Fresnel (lensless) plate: add a quadratic lens phase so the slab sits at f = n·p²/λ from the plate.
+OTC.fresnelPlate = function (phase, n, levels = 256) {
+  const out = new Uint8Array(n * n), q = TAU / levels;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const p = y * n + x, rr = (x - n / 2) ** 2 + (y - n / 2) ** 2; let v = wrap(phase[p] - PI * rr / n); if (levels < 256) v = (Math.round(v / q) % levels) * q; out[p] = Math.round(v / TAU * 255) & 255; }
+  return out;
+};
+
+// ───────────────────────── file writers ─────────────────────────
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(buf) { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+// gray8 PNG; deflate(Uint8Array) must return zlib-wrapped data (Node: zlib.deflateSync; browser: CompressionStream("deflate"))
+OTC.pngGray = async function (gray, w, h, deflate) {
+  const raw = new Uint8Array((w + 1) * h); for (let y = 0; y < h; y++) { raw[y * (w + 1)] = 0; raw.set(gray.subarray(y * w, (y + 1) * w), y * (w + 1) + 1); }
+  const z = await deflate(raw);
+  const chunk = (type, data) => { const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer); dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i); out.set(data, 8); dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length))); return out; };
+  const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer); dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 8; ihdr[9] = 0;
+  const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", z), chunk("IEND", new Uint8Array(0))];
+  const len = parts.reduce((a, p) => a + p.length, 0), png = new Uint8Array(len); let o = 0; for (const p of parts) { png.set(p, o); o += p.length; } return png;
+};
+// GDSII stream writer (1 nm database unit). Layers: 1 waveguides, 2 weight patches (datatype = dose level 0..255),
+// 3 facet converters/terminators, 10 fiducials, 63 die outline.
+OTC.gds = function (layout, name = "OGPU") {
+  const bytes = []; const push = a => { for (const b of a) bytes.push(b); };
+  const rec = (type, dt, data) => { const len = 4 + data.length; push([len >> 8, len & 255, type, dt]); push(data); };
+  const i2 = (...v) => { const o = []; for (const x of v) o.push((x >> 8) & 255, x & 255); return o; };
+  const i4 = (...v) => { const o = []; for (const x of v) { const u = x >>> 0; o.push((u >>> 24) & 255, (u >>> 16) & 255, (u >>> 8) & 255, u & 255); } return o; };
+  const real8 = v => { const b = new Array(8).fill(0); if (v === 0) return b; let s = 0; if (v < 0) { s = 128; v = -v; } let e = 64; while (v >= 1) { v /= 16; e++; } while (v < 1 / 16) { v *= 16; e--; } b[0] = s | e; for (let i = 1; i < 8; i++) { v *= 256; const d = Math.floor(v); b[i] = d; v -= d; } return b; };
+  const str = s => { const a = Array.from(s).map(c => c.charCodeAt(0) & 127); if (a.length % 2) a.push(0); return a; };
+  const now = new Date(), date = i2(now.getFullYear(), now.getMonth() + 1, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+  const nm = v => Math.round(v * 1000);
+  rec(0x00, 0x02, i2(600)); rec(0x01, 0x02, date.concat(date)); rec(0x02, 0x06, str(name.toUpperCase() + ".DB"));
+  rec(0x03, 0x05, real8(1e-3).concat(real8(1e-9)));
+  rec(0x05, 0x02, date.concat(date)); rec(0x06, 0x06, str(name.toUpperCase()));
+  const path = (layer, dt, pts, width) => {
+    for (let s = 0; s < pts.length - 1; s += 8000) {
+      const seg = pts.slice(s, Math.min(pts.length, s + 8001));
+      rec(0x09, 0x00, []); rec(0x0D, 0x02, i2(layer)); rec(0x0E, 0x02, i2(dt)); rec(0x21, 0x02, i2(0)); rec(0x0F, 0x03, i4(nm(width)));
+      rec(0x10, 0x03, i4(...seg.flatMap(p => [nm(p[0]), nm(p[1])]))); rec(0x11, 0x00, []);
+    }
+  };
+  const box = (layer, dt, x0, y0, x1, y1) => { rec(0x08, 0x00, []); rec(0x0D, 0x02, i2(layer)); rec(0x0E, 0x02, i2(dt)); rec(0x10, 0x03, i4(nm(x0), nm(y0), nm(x1), nm(y0), nm(x1), nm(y1), nm(x0), nm(y1), nm(x0), nm(y0))); rec(0x11, 0x00, []); };
+  for (const p of layout.paths) path(p.kind === "converter" || p.kind === "terminator" ? 3 : 1, Math.round(255 * p.level), p.pts, p.w);
+  for (const q of layout.patches) box(2, Math.round(255 * q.level), q.x0, q.y - q.w / 2, q.x1, q.y + q.w / 2);
+  for (const m of layout.marks) { box(10, 0, m.x - m.size, m.y - m.arm, m.x + m.size, m.y + m.arm); box(10, 0, m.x - m.arm, m.y - m.size, m.x + m.arm, m.y + m.size); }
+  box(63, 0, 0, 0, layout.die.W, layout.die.H);
+  rec(0x07, 0x00, []); rec(0x04, 0x00, []);
+  return new Uint8Array(bytes);
+};
+OTC.svg = function (layout, opt = {}) {
+  const s = opt.scale || 0.05, W = layout.die.W * s, H = layout.die.H * s;
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(0)}" height="${H.toFixed(0)}" viewBox="0 0 ${layout.die.W.toFixed(0)} ${layout.die.H.toFixed(0)}">`, `<rect width="100%" height="100%" fill="#0b1118"/>`];
+  for (const p of layout.paths) out.push(`<polyline fill="none" stroke="rgb(${Math.round(60 + 195 * p.level)},${Math.round(120 + 80 * p.level)},255)" stroke-width="${Math.max(p.w, 1 / s)}" points="${p.pts.map(q => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ")}"/>`);
+  for (const q of layout.patches) out.push(`<rect x="${q.x0.toFixed(1)}" y="${(q.y - q.w).toFixed(1)}" width="${(q.x1 - q.x0).toFixed(1)}" height="${(2 * q.w).toFixed(1)}" fill="rgb(255,${Math.round(220 - 160 * (q.level - 0.5) * 2)},60)"/>`);
+  for (const m of layout.marks) out.push(`<path d="M${m.x - m.size} ${m.y}H${m.x + m.size}M${m.x} ${m.y - m.size}V${m.y + m.size}" stroke="#fff" stroke-width="${2 * m.arm}"/>`);
+  out.push("</svg>"); return out.join("\n");
+};
+
+// ───────────────────────── full flow ─────────────────────────
+OTC.DEFAULT_SYSTEM = {
+  symbolRate_GHz: 10, wavelengths: 1, laserPerCore_mW: 20, wallPlug: 0.2, tec_W: 2, fiberPitch_um: 127,
+  facetLoss_dB: 2.0, dacBits: 8, adcBits: 8,
+  energy_pJ: { modulator: 1.0, dac: 1.0, tia: 0.5, adc: 2.0 },
+  si: { Ppi_mW: 20, mziArea_mm2: 0.03 },
+  gpuRef: { name: "NVIDIA H100 SXM (INT8 dense)", tops: 1979, watts: 700 },
+};
+OTC.run = async function (design, opt = {}) {
+  const log = opt.log || (() => {}), tick = opt.tick || (async () => {});
+  const proc = Object.assign({}, OTC.PROCESS_DEFAULT, design.process || {});
+  design.system = Object.assign({}, OTC.DEFAULT_SYSTEM, design.system || {});
+  log("Designing MZI cell (mode solver, bend loss, coupler calibration)…", 0.05); await tick();
+  const g = OTC.designCell(design.platform, proc, (design.wavelength_nm || 1550) / 1000);
+  const R = opt.realizations || 10, pool = [];
+  for (let k = 0; k < R; k++) { log(`Writing and measuring MZI realization ${k + 1}/${R} (BPM)…`, 0.1 + 0.5 * k / R); await tick(); pool.push(OTC.realizeMZI(g, 1000 + k * 37 + (design.seed || 0) * 101)); }
+  const stats = { pool, portSigma: OTC.portPhaseSigma(g), passIL: g.P.lossDbCm * g.Lcell / 1e4 };
+  log("Programming cores (SVD + Clements) and simulating accuracy…", 0.65); await tick();
+  const progs = design.cores.map(c => OTC.programCore(c, design.N));
+  const meanIL = pool.reduce((a, p) => a + p.IL, 0) / pool.length;
+  const pathIL = 2 * design.system.facetLoss_dB + (2 * design.N + 1) * meanIL + 0.5;
+  const rx = OTC.receiverSNR(design, pathIL);
+  const acc = design.cores.map((c, i) => {
+    const res = {};
+    for (const cal of [false, true]) {
+      const real = OTC.realizeCore(progs[i], stats, { calibrated: cal, levels: OTC.PLATFORMS[design.platform].levels, seed: 17 + i });
+      const run = OTC.runCore(progs[i], real, { samples: opt.samples || 200, dacBits: design.system.dacBits, adcBits: design.system.adcBits, snrLin: rx.snr, seed: 5 + i });
+      res[cal ? "cal" : "uncal"] = { real, run, fid: OTC.fidelity(M.fromReal(progs[i].target), real.Teff) };
+    }
+    return res;
+  });
+  log("Compiling layout…", 0.8); await tick();
+  const layout = OTC.compile(design, g, progs);
+  const tiles = OTC.tilePlan(layout, proc);
+  const enob = Math.min(...acc.map(a => a.cal.run.enob));
+  const perf = OTC.performance(design, g, layout, { enob });
+  log("Done.", 1);
+  return { design, proc, g, stats, progs, acc, layout, tiles, perf, rx, pathIL };
+};
+
+if (typeof module !== "undefined" && module.exports) module.exports = OTC; else root.OTC = OTC;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 2) => (Math.abs(v) < 1e-12 ? 0 : +v).toFixed(d);
+const tick = () => new Promise(r => setTimeout(r, 0));
+const DEFAULT = {"name":"OGPU-1","description":"Four 16×16 optical tensor cores written by light into a Sb2Se3-on-SiN slab. Each core computes y = W·x for an arbitrary real W (SVD mesh: Vᵀ mesh → Σ attenuators → U mesh). Weights are stored as written index patches: non-volatile, zero hold power, rewritable.","version":1,"platform":"pcm_sin","wavelength_nm":1550,"N":16,"seed":1,"process":{"plate":"lcos","frames":8,"projNA":0.4,"drift":0.01,"exposure_s":0.5,"settle_s":0.3},"system":{"symbolRate_GHz":10,"wavelengths":1,"laserPerCore_mW":20,"wallPlug":0.2,"tec_W":2,"fiberPitch_um":127,"facetLoss_dB":2,"dacBits":8,"adcBits":8,"energy_pJ":{"modulator":1,"dac":1,"tia":0.5,"adc":2}},"cores":[{"name":"core0","weights":"dct","pipeline":["fanin","meshV","sigma","meshU","fanout"]},{"name":"core1","weights":"random:1","pipeline":["fanin","meshV","sigma","meshU","fanout"]},{"name":"core2","weights":"random:2","pipeline":["fanin","meshV","sigma","meshU","fanout"]},{"name":"core3","weights":"hadamard","pipeline":["fanin","meshV","sigma","meshU","fanout"]}]};
+let D = JSON.parse(JSON.stringify(DEFAULT));
+let R = null, TILE = { r: 0, c: 0 }, HOLO = null, view = { s: 0, cx: 0, cy: 0 };
+const BLOCKS = {
+  fanin: { nm: "Fiber fan-in", ds: "127 µm fiber pitch → lane pitch, with a graded-dose facet mode converter" },
+  meshV: { nm: "Vᵀ mesh", ds: "N(N−1)/2 MZIs, Clements layout" },
+  sigma: { nm: "Σ attenuators", ds: "one MZI per lane against a terminated dump guide" },
+  meshU: { nm: "U mesh", ds: "N(N−1)/2 MZIs, Clements layout" },
+  phase: { nm: "Phase screen", ds: "one weight patch per lane" },
+  fanout: { nm: "Fiber fan-out", ds: "lane pitch → 127 µm, mode converter" },
+};
+const WOPTS = [["dct", "DCT (orthonormal)"], ["hadamard", "Hadamard"], ["random:1", "random #1"], ["random:2", "random #2"], ["random:3", "random #3"], ["identity", "identity"], ["blur", "3-tap blur"]];
+
+// ---------- rail ----------
+function fillRail() {
+  $("d-name").value = D.name;
+  $("d-plat").innerHTML = Object.entries(OTC.PLATFORMS).map(([k, p]) => `<option value="${k}">${p.name}</option>`).join("");
+  $("d-plat").value = D.platform; $("d-N").value = String(D.N);
+  const p = OTC.PLATFORMS[D.platform];
+  $("platNote").textContent = `n₀ ${p.n0}, Δn ${p.dn}, ${p.rewritable ? "rewritable" : "write-once"}, ${p.volatile ? "volatile" : "non-volatile"}. ${p.notes}`;
+  const pipe = D.cores[0].pipeline;
+  $("blocks").innerHTML = pipe.map((b, i) => `<div class="blk"><div><div class="nm">${i + 1}. ${BLOCKS[b].nm}</div><div class="ds">${BLOCKS[b].ds}</div></div><div class="bt"><button data-a="up" data-i="${i}" aria-label="move up">↑</button><button data-a="dn" data-i="${i}" aria-label="move down">↓</button><button data-a="rm" data-i="${i}" aria-label="remove">✕</button></div></div>`).join("");
+  $("palette").innerHTML = "Add: " + Object.entries(BLOCKS).map(([k, b]) => `<button data-add="${k}">${b.nm}</button>`).join("");
+  const has = t => pipe.includes(t);
+  $("pipeMsg").innerHTML = has("meshV") && has("sigma") && has("meshU") ? '<span class="tag ok">arbitrary W</span> Vᵀ → Σ → U realizes any real matrix.'
+    : has("meshU") || has("meshV") ? '<span class="tag mid">unitary only</span> Without Vᵀ, Σ and U together, W is replaced by its closest unitary.'
+    : '<span class="tag bad">no mesh</span> Add mesh blocks.';
+  $("cores").innerHTML = D.cores.map((c, i) => `<div class="corerow"><span>core${i}</span><select data-core="${i}">${WOPTS.map(o => `<option value="${o[0]}"${o[0] === c.weights ? " selected" : ""}>${o[1]}</option>`).join("")}</select><span class="cap">W</span></div>`).join("");
+  const pr = D.process;
+  $("p-plate").value = pr.plate; $("p-frames").value = pr.frames; $("v-frames").textContent = pr.frames; $("p-NA").value = pr.projNA; $("v-NA").textContent = fmt(pr.projNA, 2); $("p-drift").value = pr.drift; $("v-drift").textContent = fmt(100 * pr.drift, 1) + "%";
+  const s = D.system; $("s-rate").value = s.symbolRate_GHz; $("s-wl").value = s.wavelengths; $("s-laser").value = s.laserPerCore_mW; $("s-adc").value = s.adcBits;
+  const e = s.energy_pJ; $("e-mod").textContent = e.modulator; $("e-dac").textContent = e.dac; $("e-tia").textContent = e.tia; $("e-adc").textContent = e.adc;
+  $("jsonView").textContent = JSON.stringify(D, null, 2);
+}
+function dirty() { $("status").textContent = "Design changed. Press Compile & simulate."; $("prog").style.width = "0"; $("jsonView").textContent = JSON.stringify(D, null, 2); }
+$("blocks").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const i = +b.dataset.i, p = D.cores[0].pipeline;
+  if (b.dataset.a === "rm") p.splice(i, 1); if (b.dataset.a === "up" && i > 0) [p[i - 1], p[i]] = [p[i], p[i - 1]]; if (b.dataset.a === "dn" && i < p.length - 1) [p[i + 1], p[i]] = [p[i], p[i + 1]];
+  D.cores.forEach(c => c.pipeline = p.slice()); fillRail(); dirty(); });
+$("palette").addEventListener("click", e => { const b = e.target.closest("button[data-add]"); if (!b) return; const p = D.cores[0].pipeline; const at = b.dataset.add === "fanin" ? 0 : p.lastIndexOf("fanout") >= 0 && b.dataset.add !== "fanout" ? p.lastIndexOf("fanout") : p.length; p.splice(at, 0, b.dataset.add); D.cores.forEach(c => c.pipeline = p.slice()); fillRail(); dirty(); });
+$("cores").addEventListener("change", e => { const s = e.target.closest("select"); D.cores[+s.dataset.core].weights = s.value; dirty(); });
+$("addCore").addEventListener("click", () => { if (D.cores.length >= 8) return; D.cores.push({ name: "core" + D.cores.length, weights: "random:" + (D.cores.length + 1), pipeline: D.cores[0].pipeline.slice() }); fillRail(); dirty(); });
+$("rmCore").addEventListener("click", () => { if (D.cores.length <= 1) return; D.cores.pop(); fillRail(); dirty(); });
+$("d-name").addEventListener("input", e => { D.name = e.target.value || "OGPU"; dirty(); });
+$("d-plat").addEventListener("change", e => { D.platform = e.target.value; fillRail(); dirty(); });
+$("d-N").addEventListener("change", e => { D.N = +e.target.value; dirty(); });
+$("p-plate").addEventListener("change", e => { D.process.plate = e.target.value; dirty(); });
+for (const [id, key, f] of [["p-frames", "frames", v => v], ["p-NA", "projNA", v => fmt(v, 2)], ["p-drift", "drift", v => fmt(100 * v, 1) + "%"]]) $(id).addEventListener("input", e => { D.process[key] = +e.target.value; $("v-" + id.split("-")[1]).textContent = f(+e.target.value); dirty(); });
+for (const [id, key] of [["s-rate", "symbolRate_GHz"], ["s-wl", "wavelengths"], ["s-laser", "laserPerCore_mW"]]) $(id).addEventListener("change", e => { D.system[key] = +e.target.value; dirty(); });
+$("s-adc").addEventListener("change", e => { D.system.adcBits = D.system.dacBits = +e.target.value; dirty(); });
+$("runBtn").addEventListener("click", () => compileRun());
+
+// ---------- run ----------
+let JOB = 0;
+async function compileRun() {
+  const my = ++JOB;
+  $("runBtn").disabled = true;
+  try {
+    const design = JSON.parse(JSON.stringify(D));
+    R = await OTC.run(design, { realizations: +$("d-real").value, samples: 200, log: (m, p) => { $("status").textContent = m; if (p !== undefined) $("prog").style.width = (100 * p).toFixed(0) + "%"; }, tick });
+    if (my !== JOB) return;
+    HOLO = null; TILE = { r: Math.floor(R.tiles.ny / 2), c: 1 }; view = { s: 0, cx: R.layout.die.W / 2, cy: R.layout.die.H / 2 };
+    $("verCore").innerHTML = D.cores.map((c, i) => `<option value="${i}">core${i} · ${c.weights}</option>`).join("");
+    renderAll();
+    $("status").textContent = `Compiled ${D.name}: ${R.layout.paths.length} paths, ${R.layout.patches.length} weight patches.`;
+  } catch (err) { $("status").textContent = "Error: " + err.message; console.error(err); }
+  $("runBtn").disabled = false;
+}
+function renderAll() { renderSys(); renderVer(); renderFp(); renderTiles(); renderPerf(); renderBuild(); $("jsonView").textContent = JSON.stringify(D, null, 2); }
+
+// ---------- drawing helpers ----------
+function hidpi(cv, aspect) { const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth || cv.width; cv.width = Math.round(W * dpr); cv.height = Math.round(W * aspect * dpr); return { ctx: cv.getContext("2d"), dpr, W: cv.width, H: cv.height }; }
+function box(ctx, x, y, w, h, fill, stroke, text, sub, dpr, tc) {
+  ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 5 * dpr) : ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = tc || "#e3e9ef"; ctx.textAlign = "center"; ctx.font = `600 ${11.5 * dpr}px "IBM Plex Sans", sans-serif`; ctx.fillText(text, x + w / 2, y + h / 2 + (sub ? -2 : 4) * dpr);
+  if (sub) { ctx.font = `${10 * dpr}px "IBM Plex Mono", monospace`; ctx.fillStyle = "#93a2b2"; ctx.fillText(sub, x + w / 2, y + h / 2 + 12 * dpr); }
+}
+function arrow(ctx, x0, y0, x1, y1, c, dpr, lw = 1.5) { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = lw * dpr; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); const a = Math.atan2(y1 - y0, x1 - x0), h = 6 * dpr; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(a - .4), y1 - h * Math.sin(a - .4)); ctx.lineTo(x1 - h * Math.cos(a + .4), y1 - h * Math.sin(a + .4)); ctx.fill(); }
+
+// ---------- system view ----------
+function renderSys() {
+  const { ctx, dpr, W, H } = hidpi($("cvSys"), 0.52), K = D.cores.length, pipe = D.cores[0].pipeline, s = D.system;
+  ctx.fillStyle = "#0b1118"; ctx.fillRect(0, 0, W, H);
+  const u = W / 1000, y0 = 60 * u, rowH = Math.min(90 * u, (H - 110 * u) / K);
+  ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`; ctx.fillStyle = "#93a2b2"; ctx.textAlign = "left";
+  ctx.fillText("off-chip optics & electronics", 14 * u, 22 * u); ctx.fillText(`light-written chip · ${OTC.PLATFORMS[D.platform].short}`, 330 * u, 22 * u); ctx.fillText("detection & host", 800 * u, 22 * u);
+  ctx.strokeStyle = "#5aa9ff"; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.strokeRect(318 * u, 32 * u, 460 * u, H - 44 * u); ctx.setLineDash([]);
+  box(ctx, 14 * u, H / 2 - 30 * u, 90 * u, 60 * u, "#16202b", "#ff8a4c", "Laser 1550", "narrow-line", dpr);
+  box(ctx, 120 * u, H / 2 - 30 * u, 70 * u, 60 * u, "#16202b", "#93a2b2", "Splitter", `1→${K}+LO`, dpr);
+  arrow(ctx, 104 * u, H / 2, 120 * u, H / 2, "#ff8a4c", dpr);
+  for (let k = 0; k < K; k++) {
+    const yc = y0 + rowH * (k + 0.5);
+    box(ctx, 205 * u, yc - rowH * 0.34, 100 * u, rowH * 0.68, "#16202b", "#93a2b2", `${D.N}× modulators`, `DAC ${s.dacBits}b · ${s.symbolRate_GHz} GHz`, dpr);
+    arrow(ctx, 190 * u, H / 2, 205 * u, yc, "#ff8a4c", dpr, 1);
+    let x = 330 * u; const bw = (440 * u - (pipe.length - 1) * 6 * u) / pipe.length;
+    arrow(ctx, 305 * u, yc, 330 * u, yc, "#ff8a4c", dpr);
+    pipe.forEach((b, i) => { box(ctx, x, yc - rowH * 0.34, bw, rowH * 0.68, "#10233a", "#5aa9ff", BLOCKS[b].nm, i === 0 ? `core${k}: ${D.cores[k].weights}` : "", dpr); if (i) arrow(ctx, x - 6 * u, yc, x, yc, "#5aa9ff", dpr, 1); x += bw + 6 * u; });
+    box(ctx, 790 * u, yc - rowH * 0.34, 110 * u, rowH * 0.68, "#16202b", "#93a2b2", `${D.N}× coherent Rx`, `ADC ${s.adcBits}b`, dpr);
+    arrow(ctx, 770 * u, yc, 790 * u, yc, "#ff8a4c", dpr);
+    arrow(ctx, 900 * u, yc, 915 * u, H / 2, "#93a2b2", dpr, 1);
+  }
+  box(ctx, 915 * u, H / 2 - 45 * u, 75 * u, 90 * u, "#16202b", "#4fd08a", "Host", "FPGA/ASIC", dpr);
+  ctx.strokeStyle = "rgba(255,138,76,0.5)"; ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(155 * u, H / 2 + 30 * u); ctx.lineTo(155 * u, H - 10 * u); ctx.lineTo(845 * u, H - 10 * u); ctx.lineTo(845 * u, y0 + rowH * (K - 0.5) + rowH * 0.34); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#ff8a4c"; ctx.textAlign = "left"; ctx.font = `${10 * dpr}px "IBM Plex Mono", monospace`; ctx.fillText("local oscillator (same laser) → coherent receivers", 200 * u, H - 14 * u);
+  const p = R ? R.perf : null;
+  $("sysCap").textContent = `The chip itself is passive, with no metal and no electronics. Light patterns write both the waveguides and the weights. Inputs enter as modulated light through a fiber array; outputs leave to coherent receivers that share the laser as reference, so signed results are measured directly.`;
+  if (!p) return;
+  const k = (t, v, sub) => `<div class="kpi"><span class="k">${t}</span><span class="val">${v}</span><span class="sub">${sub}</span></div>`;
+  $("kpis").innerHTML = k("Throughput", `${fmt(p.ops / 1e12, 1)} TOPS`, `${p.K} cores × ${p.N}² MAC × ${D.system.symbolRate_GHz} GHz`) +
+    k("Efficiency", `${fmt(p.topsW, 1)} TOPS/W`, `${fmt(p.total, 2)} W total`) + k("Precision", `${fmt(p.enob, 1)} bits`, "worst core, calibrated") +
+    k("Die", `${fmt(p.die.W, 1)} × ${fmt(p.die.H, 1)} mm`, `${p.nMzi} MZIs, weights hold at 0 W`) + k("Latency", `${fmt(p.latency_ns, 2)} ns`, "light transit through the die");
+}
+
+// ---------- verify ----------
+function heat(cv, M, scale) {
+  const n = M.length, { ctx, W, H } = hidpi(cv, 1), cw = W / n;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const v = Math.max(-1, Math.min(1, M[i][j] / scale)), a = Math.abs(v); ctx.fillStyle = v >= 0 ? `rgb(${Math.round(240 - 12 * a)},${Math.round(240 - 147 * a)},${Math.round(240 - 193 * a)})` : `rgb(${Math.round(240 - 182 * a)},${Math.round(240 - 117 * a)},${Math.round(240 - 27 * a)})`; ctx.fillRect(j * cw, i * cw, cw + 0.5, cw + 0.5); }
+}
+function renderVer() {
+  if (!R) return;
+  const rows = R.acc.map((a, i) => { const c = a.cal, u = a.uncal, okc = c.run.enob >= 4;
+    return `<tr><td>core${i}</td><td>${D.cores[i].weights}</td><td class="num">${fmt(c.fid, 4)}</td><td class="num">${fmt(c.run.enob, 2)} <span class="tag ${okc ? "ok" : "mid"}">${okc ? "computes" : "marginal"}</span></td><td class="num">${fmt(u.fid, 4)}</td><td class="num">${fmt(u.run.enob, 2)} <span class="tag bad">fails</span></td></tr>`; }).join("");
+  $("accTbl").innerHTML = `<tr><th>Core</th><th>W</th><th>Fidelity (cal.)</th><th>ENOB (cal.)</th><th>Fidelity (uncal.)</th><th>ENOB (uncal.)</th></tr>` + rows +
+    `<tr><td colspan="6" class="cap">Receiver SNR ${fmt(R.rx.snrDb, 1)} dB at ${fmt(R.rx.Ps * 1e6, 1)} µW per output (path loss ${fmt(R.pathIL, 1)} dB incl. two facets). Weight levels: 1/${OTC.PLATFORMS[D.platform].levels} of 2π, written closed-loop.</td></tr>`;
+  const ci = +$("verCore").value || 0, mode = $("verCal").value, a = R.acc[ci][mode], prog = R.progs[ci];
+  const sc = Math.max(...prog.target.flat().map(Math.abs));
+  heat($("cvW"), prog.target, sc); heat($("cvWr"), a.real.Teff.map(r => r.map(v => v[0])), sc);
+  // scatter
+  const { ctx, dpr, W, H } = hidpi($("cvSc"), 1), pairs = a.run.pairs; let m = 0; for (const p of pairs) m = Math.max(m, Math.abs(p[0]), Math.abs(p[1]));
+  ctx.clearRect(0, 0, W, H); ctx.strokeStyle = css("--line"); ctx.lineWidth = dpr; ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
+  ctx.fillStyle = css("--accent"); for (const p of pairs) { ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc((p[0] / m + 1) / 2 * W, (1 - (p[1] / m + 1) / 2) * H, 1.8 * dpr, 0, 7); ctx.fill(); } ctx.globalAlpha = 1;
+  ctx.fillStyle = css("--muted"); ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`; ctx.fillText("exact →", W - 64 * dpr, H - 6 * dpr); ctx.fillText("↑ optical", 6 * dpr, 14 * dpr);
+  // image workload
+  const N = D.N, img = testImage(96), rnd = OTC.rng(9), real = a.real, inv = pinv(prog.target);
+  const out = new Float64Array(96 * 96), rec = new Float64Array(96 * 96);
+  const FS = prog.target.map(row => Math.min(row.reduce((s, v) => s + Math.abs(v), 0), 4 * Math.sqrt(row.reduce((s, v) => s + v * v, 0)) / Math.sqrt(3)) || 1);
+  const L = Math.pow(2, D.system.adcBits - 1) - 1;
+  for (let y = 0; y < 96; y++) for (let x0 = 0; x0 + N <= 96; x0 += N) {
+    const xv = []; for (let j = 0; j < N; j++) xv.push(2 * img[y * 96 + x0 + j] - 1);
+    const yv = [];
+    for (let i = 0; i < N; i++) { let c = [0, 0]; for (let j = 0; j < N; j++) c = OTC.C.add(c, OTC.C.scale(real.T[i][j], xv[j])); let v = (c[0] * Math.cos(real.lo[i]) + c[1] * Math.sin(real.lo[i])) * real.gain[i];
+      v = FS[i] * Math.max(-1, Math.min(1, Math.round((v / FS[i] + gauss(rnd) / Math.sqrt(R.rx.snr)) * L) / L)); yv.push(v); out[y * 96 + x0 + i] = v / FS[i]; }
+    for (let j = 0; j < N; j++) { let v = 0; for (let i = 0; i < N; i++) v += inv[j][i] * yv[i]; rec[y * 96 + x0 + j] = (v + 1) / 2; }
+  }
+  gray($("cvI0"), img, 96, v => v); gray($("cvI1"), out, 96, v => (v + 1) / 2); gray($("cvI2"), rec, 96, v => v);
+  let mse = 0; for (let p = 0; p < 96 * 96; p++) mse += (rec[p] - img[p]) ** 2; mse /= 96 * 96;
+  $("imgStat").textContent = `Reconstruction PSNR ${fmt(10 * Math.log10(1 / Math.max(mse, 1e-12)), 1)} dB (${mode}). Above ≈30 dB the image is visually clean; below ≈15 dB it is destroyed.`;
+  const pool = R.stats.pool;
+  $("poolTbl").innerHTML = `<tr><th>#</th><th>α₁ (rad)</th><th>α₂ (rad)</th><th>Arm offset (rad)</th><th>Loss (dB)</th><th>Cross extinction (dB)</th></tr>` + pool.map((p, i) => `<tr><td>${i}</td><td class="num">${fmt(p.a1, 4)}</td><td class="num">${fmt(p.a2, 4)}</td><td class="num">${fmt(p.dth, 3)}</td><td class="num">${fmt(p.IL, 2)}</td><td class="num">${fmt(p.erCross, 1)}</td></tr>`).join("") +
+    `<tr><td colspan="6" class="cap">Ideal α = π/4 = 0.7854. Cell: core ${fmt(R.g.w, 2)} µm, pitch ${fmt(R.g.D, 1)} µm, coupler ${fmt(R.g.L50, 0)} µm, MZI ${fmt(R.g.Lcell, 0)} µm, min bend radius ${fmt(R.g.Rmin / 1000, 2)} mm, blur σ ${fmt(R.g.cfg.blur, 2)} µm, speckle ${fmt(100 * R.g.cfg.sigF, 1)}%. Process centering: test MZIs measured mean α ${R.g.centering.map(c => fmt(c.alphaMean, 4)).join(", ")}, so the coupler length was corrected to ${fmt(R.g.L50, 1)} µm.</td></tr>`;
+}
+function gauss(r) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); }
+function testImage(n) { const a = new Float64Array(n * n); for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const dx = x - n * 0.38, dy = y - n * 0.42, r = Math.hypot(dx, dy); let v = 0.5 + 0.35 * Math.cos(r * 0.45) * Math.exp(-r / 40); if (x > n * 0.62 && y > n * 0.15 && y < n * 0.85) v = (Math.floor(y / 8) % 2) ? 0.9 : 0.15; if (Math.abs(x - y * 0.6 - 10) < 2) v = 1; a[y * n + x] = Math.max(0, Math.min(1, v)); } return a; }
+function gray(cv, a, n, f) { cv.width = n; cv.height = n; const ctx = cv.getContext("2d"), im = ctx.createImageData(n, n); for (let p = 0; p < n * n; p++) { const v = Math.round(255 * Math.max(0, Math.min(1, f(a[p])))); im.data[4 * p] = im.data[4 * p + 1] = im.data[4 * p + 2] = v; im.data[4 * p + 3] = 255; } ctx.putImageData(im, 0, 0); }
+function pinv(T) { const { U, S, V } = OTC.svd(T), n = T.length, smax = Math.max(...S); return Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => { let v = 0; for (let k = 0; k < n; k++) if (S[k] > 1e-6 * smax) v += V[i][k] * U[j][k] / S[k]; return v; })); }
+$("verCore").addEventListener("change", renderVer); $("verCal").addEventListener("change", renderVer);
+
+// ---------- floorplan ----------
+function renderFp() {
+  if (!R) return;
+  const cv = $("cvFp"), { ctx, dpr, W, H } = hidpi(cv, 0.56), L = R.layout;
+  const fit = Math.min(W / L.die.W, H / L.die.H) * 0.96, s = fit * Math.pow(800, view.s);
+  const X = x => W / 2 + (x - view.cx) * s, Y = y => H / 2 + (y - view.cy) * s;
+  ctx.fillStyle = "#0b1118"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = dpr; ctx.strokeRect(X(0), Y(0), L.die.W * s, L.die.H * s);
+  const vx0 = view.cx - W / 2 / s, vx1 = view.cx + W / 2 / s, vy0 = view.cy - H / 2 / s, vy1 = view.cy + H / 2 / s;
+  for (const p of L.paths) {
+    const a = p.pts[0], b = p.pts[p.pts.length - 1]; if (Math.max(a[0], b[0]) < vx0 || Math.min(a[0], b[0]) > vx1) continue;
+    ctx.strokeStyle = `rgba(111,168,255,${0.35 + 0.65 * p.level})`; ctx.lineWidth = Math.max(dpr * 0.8, p.w * s);
+    ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(X(q[0]), Y(q[1])) : ctx.moveTo(X(q[0]), Y(q[1]))); ctx.stroke();
+  }
+  for (const q of L.patches) { if (q.x1 < vx0 || q.x0 > vx1 || q.y < vy0 || q.y > vy1) continue; ctx.fillStyle = `rgb(255,${Math.round(230 - 300 * (q.level - 0.5))},60)`; ctx.fillRect(X(q.x0), Y(q.y) - Math.max(1.5 * dpr, q.w * s), Math.max(dpr, (q.x1 - q.x0) * s), Math.max(3 * dpr, 2 * q.w * s)); }
+  for (const m of L.marks) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.moveTo(X(m.x - m.size), Y(m.y)); ctx.lineTo(X(m.x + m.size), Y(m.y)); ctx.moveTo(X(m.x), Y(m.y - m.size)); ctx.lineTo(X(m.x), Y(m.y + m.size)); ctx.stroke(); }
+  ctx.font = `${10.5 * dpr}px "IBM Plex Mono", monospace`; ctx.textAlign = "left";
+  for (const b of L.blocks) { if (b.x1 < vx0 || b.x0 > vx1) continue; ctx.strokeStyle = "rgba(147,162,178,0.5)"; ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeRect(X(b.x0), Y(b.y0), (b.x1 - b.x0) * s, (b.y1 - b.y0) * s); ctx.setLineDash([]); ctx.fillStyle = "#cfd8e3"; if ((b.x1 - b.x0) * s > 50 * dpr) ctx.fillText(`core${b.core} · ${BLOCKS[b.type].nm}`, Math.max(X(b.x0), 4 * dpr) + 4 * dpr, Y(b.y0) + 13 * dpr); }
+  // scale bar
+  const sb = Math.pow(10, Math.floor(Math.log10(W * 0.2 / s))); ctx.fillStyle = "#fff"; ctx.fillRect(16 * dpr, H - 20 * dpr, sb * s, 3 * dpr); ctx.fillText(sb >= 1000 ? `${sb / 1000} mm` : `${sb} µm`, 16 * dpr, H - 26 * dpr);
+  $("fpCap").textContent = `Die ${fmt(L.die.W / 1000, 2)} × ${fmt(L.die.H / 1000, 2)} mm · MZI cell ${fmt(R.g.Lcell, 0)} µm × ${fmt(R.g.D, 1)} µm pitch · ${L.paths.length} waveguide paths · ${L.patches.length} weight patches · 4 fiducials.`;
+}
+$("zoom").addEventListener("input", e => { view.s = +e.target.value; renderFp(); });
+$("zoomAll").addEventListener("click", () => { view = { s: 0, cx: R.layout.die.W / 2, cy: R.layout.die.H / 2 }; $("zoom").value = 0; renderFp(); });
+$("zoomMzi").addEventListener("click", () => { const b = R.layout.blocks.find(q => q.type === "meshV" || q.type === "meshU"); const N = D.N; view.cx = b.x0 + R.g.Lcell * 0.5; view.cy = (b.y0 + b.y1) / 2 - (N / 2 - 1) * R.g.D; const fit = Math.min(1, 1); view.s = Math.log(Math.min(R.layout.die.W / (R.g.Lcell * 0.7), 800)) / Math.log(800); $("zoom").value = view.s; renderFp(); });
+(() => { let drag = null; const cv = $("cvFp");
+  cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", e => { if (!drag || !R) return; const dpr = cv.width / cv.clientWidth, fit = Math.min(cv.width / R.layout.die.W, cv.height / R.layout.die.H) * 0.96, s = fit * Math.pow(800, view.s); view.cx = drag.cx - (e.clientX - drag.x) * dpr / s; view.cy = drag.cy - (e.clientY - drag.y) * dpr / s; renderFp(); });
+  cv.addEventListener("pointerup", () => drag = null); })();
+
+// ---------- plate ----------
+function dmdPlan() { return OTC.tilePlan(R.layout, Object.assign({}, R.proc, { plate: "dmd" })); }
+function renderTiles() {
+  if (!R) return;
+  const cv = $("cvTiles"), L = R.layout, plan = dmdPlan(), aspect = Math.min(0.5, Math.max(0.12, L.die.H / L.die.W));
+  const { ctx, dpr, W, H } = hidpi(cv, aspect), s = Math.min(W / L.die.W, H / L.die.H);
+  ctx.fillStyle = "#0b1118"; ctx.fillRect(0, 0, W, H);
+  for (const p of L.paths) { if (p.kind === "converter" || p.kind === "terminator") continue; ctx.strokeStyle = "rgba(111,168,255,0.6)"; ctx.lineWidth = dpr * 0.6; ctx.beginPath(); ctx.moveTo(p.pts[0][0] * s, p.pts[0][1] * s); ctx.lineTo(p.pts[p.pts.length - 1][0] * s, p.pts[p.pts.length - 1][1] * s); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = dpr * 0.6;
+  for (let r = 0; r <= plan.ny; r++) { ctx.beginPath(); ctx.moveTo(0, r * plan.th * s); ctx.lineTo(plan.nx * plan.tw * s, r * plan.th * s); ctx.stroke(); }
+  for (let c = 0; c <= plan.nx; c++) { ctx.beginPath(); ctx.moveTo(c * plan.tw * s, 0); ctx.lineTo(c * plan.tw * s, plan.ny * plan.th * s); ctx.stroke(); }
+  ctx.strokeStyle = "#ff8a4c"; ctx.lineWidth = 2 * dpr; ctx.strokeRect(TILE.c * plan.tw * s, TILE.r * plan.th * s, plan.tw * s, plan.th * s);
+  const tTot = plan.count * (R.proc.exposure_s + R.proc.settle_s) / 60;
+  $("tileCap").textContent = `DMD tiles: ${plan.nx} × ${plan.ny} = ${plan.count} exposures of ${fmt(plan.tw / 1000, 2)} × ${fmt(plan.th / 1000, 2)} mm (slab pixel ${fmt(plan.px, 3)} µm, demagnification ×${fmt(plan.demag, 1)}). About ${fmt(tTot, 0)} min per die at ${R.proc.exposure_s + R.proc.settle_s} s per tile. Selected tile: row ${TILE.r}, column ${TILE.c}.`;
+  renderDmd();
+  $("plateTbl").innerHTML = `<tr><th>Plate</th><th>How it writes</th><th>Strengths</th><th>Limits</th></tr>
+    <tr><td><strong>DMD</strong> (programmable)</td><td>Images each tile directly. Gray levels come from mirror duty cycle; LED or laser light.</td><td>No speckle with incoherent light (≈1% index noise). Fast frame changes (kHz). Simple optics.</td><td>Only a few % of the light reaches the slab. Needs a demagnifying lens of NA ≥ ${fmt(D.process.projNA, 2)}.</td></tr>
+    <tr><td><strong>LCoS phase SLM</strong> (programmable Fresnel plate)</td><td>Displays the computed phase pattern. The light self-focuses into the tile (lensless at ${fmt(1024 * R.proc.lcos.pitch_um ** 2 / (OTC.PLATFORMS[D.platform].writeNm / 1000) / 1000, 0)} mm for 1024² holograms).</td><td>Nearly all light goes into the pattern. Can focus into several depths at once (3-D circuits). Rewrites at video rate.</td><td>Speckle: ${fmt(100 * 0.075, 1)}% per frame, reduced √M by averaging ${D.process.frames} frames. Holograms take compute time.</td></tr>
+    <tr><td><strong>Printed phase plate</strong> (static DOE)</td><td>The same phase pattern, etched into fused silica as 4–16 levels from the GDS (grayscale or multi-mask lithography).</td><td>One flash writes a whole tile with no SLM. Cheapest per chip, like fiber-grating phase masks.</td><td>Fixed pattern: suits waveguides and fixed weights. Weights are then trimmed with the programmable plate.</td></tr>`;
+}
+function renderDmd() {
+  const plan = dmdPlan(), [pw, ph] = [512, 320], px = plan.tw / pw;
+  const img = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th, pw, ph, px);
+  const cv = $("cvDmd"); cv.width = pw; cv.height = ph; const ctx = cv.getContext("2d"), im = ctx.createImageData(pw, ph);
+  for (let p = 0; p < pw * ph; p++) { im.data[4 * p] = im.data[4 * p + 1] = im.data[4 * p + 2] = img[p]; im.data[4 * p + 3] = 255; }
+  ctx.putImageData(im, 0, 0);
+  $("dmdCap").textContent = `Tile r${TILE.r} c${TILE.c}, shown at ${fmt(px, 2)} µm/px (the real frame is ${plan.slmPix[0]}×${plan.slmPix[1]} at ${fmt(plan.px, 3)} µm/px). Gray = write dose: waveguides at ${fmt(100 * OTC.PLATFORMS[D.platform].wgLevel, 0)}%, weight patches brighter.`;
+}
+$("cvTiles").addEventListener("click", e => { if (!R) return; const cv = $("cvTiles"), r = cv.getBoundingClientRect(), L = R.layout, plan = dmdPlan(), s = Math.min(cv.width / L.die.W, cv.height / L.die.H) * cv.clientWidth / cv.width;
+  const c = Math.floor((e.clientX - r.left) / s / plan.tw), rr = Math.floor((e.clientY - r.top) / s / plan.th); if (c >= 0 && c < plan.nx && rr >= 0 && rr < plan.ny) { TILE = { r: rr, c }; HOLO = null; $("holoCap").textContent = 'Press "Compute plate" for this tile.'; renderTiles(); } });
+$("holoBtn").addEventListener("click", async () => {
+  if (!R) return; $("holoCap").textContent = "Computing Gerchberg–Saxton hologram (512², 20 iterations)…"; await tick();
+  const n = 512, plan = dmdPlan(), fill = 0.75, m = Math.round(n * fill), pxh = Math.max(R.layout.pixel, plan.tw / m);
+  const sub = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th + (plan.th - m * pxh) / 2, m, m, pxh), T = new Float64Array(n * n), o = (n - m) / 2;
+  for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) T[(j + o) * n + i + o] = sub[j * m + i] / 255;
+  const H = OTC.hologram(T, n, { iters: 20, fill: 0.8, seed: 5 });
+  const plate = OTC.fresnelPlate(H.phase, n, 256); HOLO = { plate, n };
+  const put = (cv, f) => { cv.width = n; cv.height = n; const ctx = cv.getContext("2d"), im = ctx.createImageData(n, n); for (let p = 0; p < n * n; p++) { const v = f(p); im.data[4 * p] = v[0]; im.data[4 * p + 1] = v[1]; im.data[4 * p + 2] = v[2]; im.data[4 * p + 3] = 255; } ctx.putImageData(im, 0, 0); };
+  put($("cvHolo"), p => [plate[p], plate[p], plate[p]]);
+  put($("cvRec"), p => { const t = Math.min(1, Math.sqrt(H.I[p] / (H.scale * 1.2))); return [255 * Math.min(1, t * 1.5), 255 * Math.max(0, (t - 0.3) * 1.4), 255 * Math.max(0, t - 0.75) * 3]; });
+  $("holoCap").textContent = `Phase 0 → 2π (black → white), 256 levels, with a Fresnel lens term built in. Use it on an LCoS SLM or etch it as a DOE. Single-frame speckle ${fmt(100 * H.sigma, 1)}% rms.`;
+  $("recCap").textContent = `Simulated pump light at the slab. Averaging ${D.process.frames} independent frames brings the speckle to ≈${fmt(100 * H.sigma / Math.sqrt(D.process.frames), 1)}%.`;
+});
+
+// ---------- performance ----------
+function bars(cv, items, unit, log) {
+  const { ctx, dpr, W, H } = hidpi(cv, 0.5); ctx.clearRect(0, 0, W, H);
+  const pl = 150 * dpr, pr = 110 * dpr, bh = Math.min(26 * dpr, (H - 20 * dpr) / items.length - 8 * dpr), mx = Math.max(...items.map(i => i.v));
+  const sx = v => log ? (Math.log10(Math.max(v, 1e-3)) + 3) / (Math.log10(mx) + 3) * (W - pl - pr) : v / mx * (W - pl - pr);
+  ctx.font = `${12 * dpr}px "IBM Plex Sans", sans-serif`;
+  items.forEach((it, k) => { const y = 10 * dpr + k * (bh + 8 * dpr); ctx.fillStyle = css("--ink"); ctx.textAlign = "right"; ctx.fillText(it.k, pl - 8 * dpr, y + bh * 0.7); ctx.fillStyle = it.c; ctx.fillRect(pl, y, Math.max(1, sx(it.v)), bh); ctx.fillStyle = css("--muted"); ctx.textAlign = "left"; ctx.font = `${11.5 * dpr}px "IBM Plex Mono", monospace`; ctx.fillText(`${fmt(it.v, it.v < 10 ? 2 : 1)} ${unit}`, pl + Math.max(1, sx(it.v)) + 6 * dpr, y + bh * 0.7); ctx.font = `${12 * dpr}px "IBM Plex Sans", sans-serif`; });
+}
+function renderPerf() {
+  if (!R) return; const p = R.perf;
+  const k = (t, v, sub) => `<div class="kpi"><span class="k">${t}</span><span class="val">${v}</span><span class="sub">${sub}</span></div>`;
+  $("perfKpis").innerHTML = k("This chip", `${fmt(p.topsW, 1)} TOPS/W`, `${fmt(p.ops / 1e12, 1)} TOPS at ${fmt(p.total, 2)} W, ≈${fmt(p.enob, 1)} bits`) + k("Same mesh in Si photonics", `${fmt(p.si.topsW, 2)} TOPS/W`, `weights hold ${fmt(p.si.weights, 1)} W`) + k(p.gpu.name, `${fmt(p.gpu.topsW, 2)} TOPS/W`, `${p.gpu.tops} TOPS at ${p.gpu.watts} W, exact int8`) + k("Energy per MAC", `${fmt(p.pJperMAC, 3)} pJ`, "wall-plug, including converters");
+  bars($("cvPow"), Object.entries(p.P).map(([kk, v]) => ({ k: kk, v, c: kk === "weights" ? css("--good") : css("--accent") })).concat([{ k: "Si-photonics weights", v: p.si.weights, c: css("--si") }]), "W");
+  bars($("cvEff"), [{ k: "Light-written", v: p.topsW, c: css("--accent") }, { k: "Si-photonics (TO)", v: p.si.topsW, c: css("--si") }, { k: "H100 (int8)", v: p.gpu.topsW, c: css("--gpu") }], "TOPS/W");
+  // scaling
+  const Ns = [4, 8, 16, 32, 64, 128], g = R.g, xs = [], lw = [], ls = [], len = [];
+  for (const n of Ns) { const d = Object.assign({}, R.design, { N: n }), pp = OTC.performance(d, g, null, null); xs.push(n); lw.push(pp.topsW); ls.push(pp.si.topsW); len.push((2 * n * g.Lcell + 12000) / 1000); }
+  const { ctx, dpr, W, H } = hidpi($("cvScale"), 0.32); ctx.clearRect(0, 0, W, H);
+  const pl = 56 * dpr, pr = 64 * dpr, pt = 14 * dpr, pb = 30 * dpr, X = n => pl + (Math.log2(n) - 2) / (Math.log2(128) - 2) * (W - pl - pr);
+  const ymax = Math.max(...lw) * 1.15, Y = v => pt + (H - pt - pb) * (1 - v / ymax), lmax = Math.max(...len) * 1.1, Y2 = v => pt + (H - pt - pb) * (1 - v / lmax);
+  ctx.strokeStyle = css("--line"); ctx.lineWidth = dpr; ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`; ctx.fillStyle = css("--muted");
+  Ns.forEach(n => { ctx.beginPath(); ctx.moveTo(X(n), pt); ctx.lineTo(X(n), H - pb); ctx.stroke(); ctx.textAlign = "center"; ctx.fillText("N=" + n, X(n), H - 10 * dpr); });
+  ctx.textAlign = "left"; ctx.fillText("TOPS/W", 6 * dpr, pt + 4 * dpr); ctx.textAlign = "right"; ctx.fillText("die length (mm)", W - 4 * dpr, pt + 4 * dpr);
+  const line = (ys, Yf, c, dash) => { ctx.strokeStyle = c; ctx.lineWidth = 2 * dpr; ctx.setLineDash(dash ? [6 * dpr, 4 * dpr] : []); ctx.beginPath(); xs.forEach((n, i) => i ? ctx.lineTo(X(n), Yf(ys[i])) : ctx.moveTo(X(n), Yf(ys[i]))); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = c; xs.forEach((n, i) => { ctx.beginPath(); ctx.arc(X(n), Yf(ys[i]), 3 * dpr, 0, 7); ctx.fill(); }); };
+  line(lw, Y, css("--accent")); line(ls, Y, css("--si")); line(len, Y2, css("--muted"), true);
+  ctx.fillStyle = css("--muted"); ctx.textAlign = "center"; xs.forEach((n, i) => ctx.fillText(`${fmt(len[i], 0)} mm`, X(n), Y2(len[i]) - 8 * dpr));
+  ctx.textAlign = "left"; ctx.fillStyle = css("--accent"); ctx.fillText(`light-written ${fmt(lw[lw.length - 1], 1)}`, X(128) - 150 * dpr, Y(lw[lw.length - 1]) - 8 * dpr); ctx.fillStyle = css("--si"); ctx.fillText("silicon TO", X(128) - 90 * dpr, Y(ls[ls.length - 1]) - 8 * dpr); ctx.fillStyle = css("--muted"); ctx.fillText("die length", X(64) + 6 * dpr, Y2(len[4]) + 14 * dpr);
+  $("advTbl").innerHTML = `<tr><th>Aspect</th><th>Light-written (this design)</th><th>Silicon photonics</th></tr>
+    <tr><td>Making the circuit</td><td>Unpatterned film stack, then a light pattern. No masks; a design change is a new plate pattern.</td><td>Mask set plus a foundry run (weeks to months).</td></tr>
+    <tr><td>Holding the weights</td><td><span class="tag ok">0 W</span> The weight is the written index (non-volatile phase-change material).</td><td><span class="tag bad">${fmt(p.si.weights, 1)} W</span> Heaters must stay on. This dominates at large N.</td></tr>
+    <tr><td>Fixing defects</td><td>Measure, then re-expose just that patch (write–verify).</td><td>Only by trimming phases; a broken device stays broken.</td></tr>
+    <tr><td>Die size limit</td><td>None from the exposure field: tiles stitch to wafer scale.</td><td>Reticle limit ≈ 26 × 33 mm without stitching.</td></tr>
+    <tr><td>Fiber coupling</td><td>Graded-dose mode converter written at the facet.</td><td>Needs spot-size converters or grating couplers.</td></tr>
+    <tr><td>Footprint</td><td><span class="tag bad">large</span> MZI ${fmt(R.g.Lcell / 1000, 2)} mm, because index contrast is ≈${(Math.abs(OTC.PLATFORMS[D.platform].dn) * OTC.PLATFORMS[D.platform].wgLevel).toExponential(0)}.</td><td><span class="tag ok">small</span> MZI ≈0.1–0.3 mm.</td></tr>
+    <tr><td>Weight update speed</td><td><span class="tag mid">ms–s</span> per tile (writing), so best for inference with stationary weights.</td><td>µs (thermal) to ns (electro-optic).</td></tr>
+    <tr><td>Process maturity</td><td><span class="tag bad">research</span> Multi-level phase-change stability and writing uniformity still need proof.</td><td><span class="tag ok">foundry PDKs</span></td></tr>`;
+}
+
+// ---------- build ----------
+function renderBuild() {
+  if (!R) return; const p = OTC.PLATFORMS[D.platform], g = R.g, plan = dmdPlan(), L = R.layout;
+  const steps = [
+    ["Make the blank wafer (standard foundry steps, no patterning)", `<ul>${p.stack.map(s => `<li>${s}</li>`).join("")}</ul><p class="cap">Dice into ${fmt(L.die.W / 1000 + 2, 0)} × ${fmt(L.die.H / 1000 + 2, 0)} mm blanks and polish both end facets before writing. The facet mode converter is written later.</p>`],
+    ["Set up the writing station", `<ul><li>${p.writeNm} nm writing laser (CW for crystallizing, pulsed for erasing), beam expander, homogenizer</li><li>${D.process.plate === "dmd" ? `DMD (${R.proc.dmd.pixels.join("×")}, ${R.proc.dmd.pitch_um} µm)` : `phase-only LCoS SLM (${R.proc.lcos.pixels.join("×")}, ${R.proc.lcos.pitch_um} µm)`} → 4f relay, demagnification ×${fmt(plan.demag, 1)}, objective NA ≥ ${fmt(D.process.projNA, 2)}</li><li>XY air-bearing stage (≥ ${fmt(L.die.W / 1000 + 10, 0)} mm travel, ≤ 50 nm repeatability) with autofocus, fiducial camera and in-line power meter</li></ul>`],
+    ["Calibrate dose to index", `<p>Write test stripes at 16 dose levels and measure their index change with an interferometric microscope or test MZIs. Fit a dose→Δn curve and store it as the plate's gray-level lookup. Then write test MZIs and correct the coupler length (process centering; the simulation's correction was ${fmt(R.g.centering[0] ? (R.g.L50 - R.g.centering[0].L50) : 0, 1)} µm).</p>`],
+    ["Write the die", `<p>Fiducials first. Then ${plan.count} tiles in serpentine order, each with a 2 µm overlap blended linearly between tiles. Waveguides are written at ${fmt(100 * p.wgLevel, 0)}% dose. ${D.process.plate === "lcos" ? `Each tile is the average of ${D.process.frames} hologram frames with independent random phase, to suppress speckle.` : "Gray levels come from mirror PWM."} Estimated ${fmt(plan.count * (R.proc.exposure_s + R.proc.settle_s) / 60, 0)} min per die.</p>`],
+    ["Package", `<p>Align two ${D.N * D.cores.length}-channel fiber arrays (127 µm pitch, PM fiber) to the written facet converters, cure with UV epoxy, and mount on a TEC held at 25.00 ± 0.05 °C. Add a cap or nitrogen purge to protect the film.</p>`],
+    ["Calibrate the cores (write–verify)", `<p>For each MZI, in mesh order: inject light at 1550 nm, measure its splitting through the output fiber array, and fit its coupler angles (expected spread ${fmt(Math.min(...R.stats.pool.map(q => q.a1)), 3)}–${fmt(Math.max(...R.stats.pool.map(q => q.a1)), 3)} rad). Solve hardware-aware phases, then expose the weight patch in small dose steps until the target is reached. Finally fit each receiver's phase and gain against known input vectors. Expected result: ≈${fmt(R.perf.enob, 1)} effective bits.</p>`],
+    ["Run", `<p>The host streams input vectors to the ${D.N * D.cores.length} modulators at ${D.system.symbolRate_GHz} GBd and reads ${D.N * D.cores.length} coherent receivers. To load new weights, re-expose only the weight tiles (${R.layout.patches.length} patches). Wavelength-multiplexed operation multiplies throughput if the couplers are made broadband.</p>`],
+  ];
+  $("buildSteps").innerHTML = steps.map(s => `<li><div><strong>${s[0]}</strong>${s[1]}</div></li>`).join("");
+  $("bomTbl").innerHTML = `<tr><th>Item</th><th>Specification for this design</th><th>Qty</th></tr>
+    <tr><td>Film-stack wafers</td><td>${p.stack.slice(1).join(" / ")}</td><td>1 per ${Math.max(1, Math.floor(80 / (L.die.H / 1000 + 2)))} dies (100 mm wafer)</td></tr>
+    <tr><td>Writing laser</td><td>${p.writeNm} nm, ≥ 1 W CW (crystallize) + ns-pulsed (erase)</td><td>1</td></tr>
+    <tr><td>Programmable plate</td><td>${D.process.plate === "dmd" ? "DMD 2560×1600 class (e.g. TI DLP9000 family)" : "Phase-only LCoS SLM, 4K class, 3.74 µm pitch (e.g. Holoeye GAEA-2 class)"}</td><td>1</td></tr>
+    <tr><td>Projection optics</td><td>4f relay + objective, NA ≥ ${fmt(D.process.projNA, 2)}, field ≥ ${fmt(plan.tw / 1000, 1)} mm</td><td>1</td></tr>
+    <tr><td>Stage</td><td>XY air-bearing, ≥ ${fmt(L.die.W / 1000 + 10, 0)} mm travel, interferometric encoders, autofocus</td><td>1</td></tr>
+    <tr><td>Readout laser</td><td>1550 nm, linewidth ≤ 100 kHz, ${fmt(D.system.laserPerCore_mW * D.cores.length * 2, 0)} mW (signal + LO)</td><td>1</td></tr>
+    <tr><td>Modulator array</td><td>${D.N * D.cores.length} amplitude/sign modulators, ${D.system.symbolRate_GHz} GBd (thin-film LiNbO₃)</td><td>${D.N * D.cores.length}</td></tr>
+    <tr><td>Coherent receivers</td><td>Balanced PD + TIA, ${D.system.symbolRate_GHz / 2} GHz bandwidth</td><td>${D.N * D.cores.length}</td></tr>
+    <tr><td>Converters + host</td><td>${D.system.dacBits}-bit DACs, ${D.system.adcBits}-bit ADCs at ${D.system.symbolRate_GHz} GS/s, FPGA with high-speed transceivers</td><td>${D.N * D.cores.length} each</td></tr>
+    <tr><td>Fiber arrays + TEC package</td><td>${D.N * D.cores.length}-ch, 127 µm pitch, PM; TEC ±0.05 °C</td><td>2 + 1</td></tr>`;
+}
+
+// ---------- export ----------
+function download(name, data, type) { try { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); $("expMsg").firstChild.textContent = `Started download of ${name}. If nothing happened, this viewer blocks downloads. `; } catch (e) { $("expMsg").firstChild.textContent = "Downloads are blocked here. "; } }
+const deflate = async u => { const cs = new CompressionStream("deflate"), w = cs.writable.getWriter(); w.write(u); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); };
+$("xJson").addEventListener("click", () => download(`${D.name}.json`, JSON.stringify(D, null, 2), "application/json"));
+$("xGds").addEventListener("click", () => { if (R) download(`${D.name}.gds`, OTC.gds(R.layout, D.name.replace(/\W/g, "_")), "application/octet-stream"); });
+$("xCsv").addEventListener("click", () => { if (!R) return; const rows = ["core,block,col,mode,kind,x0_um,x1_um,y_um,dose_0_255,phase_rad"].concat(R.layout.patches.map(p => [p.core, p.block, p.col, p.m, p.kind, p.x0.toFixed(3), p.x1.toFixed(3), p.y.toFixed(3), Math.round(255 * p.level), p.value.toFixed(5)].join(","))); download(`${D.name}_weights.csv`, rows.join("\n"), "text/csv"); });
+$("xDmd").addEventListener("click", async () => { if (!R) return; const plan = dmdPlan(), [w, h] = plan.slmPix; const img = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th, w, h, plan.px); download(`${D.name}_dmd_r${TILE.r}_c${TILE.c}.png`, await OTC.pngGray(img, w, h, deflate), "image/png"); });
+$("xHolo").addEventListener("click", async () => { if (!HOLO) { $("expMsg").firstChild.textContent = "Compute a plate in the Plate tab first. "; return; } download(`${D.name}_fresnel_r${TILE.r}_c${TILE.c}.png`, await OTC.pngGray(HOLO.plate, HOLO.n, HOLO.n, deflate), "image/png"); });
+$("xCopy").addEventListener("click", () => { const t = JSON.stringify(D, null, 2); navigator.clipboard.writeText(t).then(() => $("expMsg").firstChild.textContent = "Design JSON copied. ", () => { const r = document.createRange(); r.selectNodeContents($("jsonView")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("expMsg").firstChild.textContent = "Clipboard blocked; the JSON below is selected, press Ctrl/Cmd+C. "; }); });
+
+// ---------- tabs ----------
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  for (const t of ["sys", "ver", "fp", "pl", "perf", "build", "exp", "notes"]) $("t-" + t).hidden = t !== b.dataset.tab;
+  if (R) ({ sys: renderSys, ver: renderVer, fp: renderFp, pl: renderTiles, perf: renderPerf, build: renderBuild })[b.dataset.tab]?.();
+}));
+window.addEventListener("resize", () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => R && renderAll(), 200); });
+fillRail(); renderSys(); compileRun();
+window.__OG = { get R() { return R; }, D };
+})();
+</script>

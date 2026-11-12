@@ -1,0 +1,274 @@
+{
+  "design": {
+    "name": "OGPU-1",
+    "description": "Four 16×16 optical tensor cores written by light into a Sb2Se3-on-SiN slab. Each core computes y = W·x for an arbitrary real W (SVD mesh: Vᵀ mesh → Σ attenuators → U mesh). Weights are stored as written index patches: non-volatile, zero hold power, rewritable.",
+    "version": 1,
+    "platform": "pcm_sin",
+    "wavelength_nm": 1550,
+    "N": 16,
+    "seed": 1,
+    "process": {
+      "plate": "lcos",
+      "frames": 8,
+      "projNA": 0.4,
+      "drift": 0.01,
+      "exposure_s": 0.5,
+      "settle_s": 0.3
+    },
+    "system": {
+      "symbolRate_GHz": 10,
+      "wavelengths": 1,
+      "laserPerCore_mW": 20,
+      "wallPlug": 0.2,
+      "tec_W": 2,
+      "fiberPitch_um": 127,
+      "facetLoss_dB": 2,
+      "dacBits": 8,
+      "adcBits": 8,
+      "energy_pJ": {
+        "modulator": 1,
+        "dac": 1,
+        "tia": 0.5,
+        "adc": 2
+      },
+      "si": {
+        "Ppi_mW": 20,
+        "mziArea_mm2": 0.03
+      },
+      "gpuRef": {
+        "name": "NVIDIA H100 SXM (INT8 dense)",
+        "tops": 1979,
+        "watts": 700
+      }
+    },
+    "cores": [
+      {
+        "name": "core0",
+        "weights": "dct",
+        "pipeline": [
+          "fanin",
+          "meshV",
+          "sigma",
+          "meshU",
+          "fanout"
+        ]
+      },
+      {
+        "name": "core1",
+        "weights": "random:1",
+        "pipeline": [
+          "fanin",
+          "meshV",
+          "sigma",
+          "meshU",
+          "fanout"
+        ]
+      },
+      {
+        "name": "core2",
+        "weights": "random:2",
+        "pipeline": [
+          "fanin",
+          "meshV",
+          "sigma",
+          "meshU",
+          "fanout"
+        ]
+      },
+      {
+        "name": "core3",
+        "weights": "hadamard",
+        "pipeline": [
+          "fanin",
+          "meshV",
+          "sigma",
+          "meshU",
+          "fanout"
+        ]
+      }
+    ]
+  },
+  "generated": "2026-11-12T00:31:02.570Z",
+  "engine": "OTC 1.0.0",
+  "cell": {
+    "core_width_um": 2.66806,
+    "lane_pitch_um": 13.3403,
+    "coupler_gap_um": 2.66806,
+    "coupler_length_um": 121.717,
+    "sbend_length_um": 324.631,
+    "phase_patch_length_um": 114.815,
+    "mzi_length_um": 1814.28,
+    "min_bend_radius_um": 2654.77,
+    "neff": 1.80803,
+    "write_blur_sigma_um": 0.325263,
+    "speckle_rms": 0.0235285
+  },
+  "process_centering": [
+    {
+      "L50": 123.407,
+      "alphaMean": 0.789685
+    }
+  ],
+  "device_pool": [
+    {
+      "a1": 0.796058,
+      "a2": 0.77414,
+      "dth": -0.00246506,
+      "IL": 0.255417,
+      "erCross": 61.0691
+    },
+    {
+      "a1": 0.788648,
+      "a2": 0.783008,
+      "dth": 0.0206199,
+      "IL": 0.260174,
+      "erCross": 53.436
+    },
+    {
+      "a1": 0.801772,
+      "a2": 0.785393,
+      "dth": 0.013152,
+      "IL": 0.261079,
+      "erCross": 35.5003
+    },
+    {
+      "a1": 0.784239,
+      "a2": 0.78182,
+      "dth": -0.010985,
+      "IL": 0.251959,
+      "erCross": 45.7238
+    },
+    {
+      "a1": 0.783722,
+      "a2": 0.779145,
+      "dth": -0.0305255,
+      "IL": 0.253383,
+      "erCross": 41.4657
+    },
+    {
+      "a1": 0.789356,
+      "a2": 0.760686,
+      "dth": 0.0103928,
+      "IL": 0.254636,
+      "erCross": 33.6861
+    },
+    {
+      "a1": 0.780484,
+      "a2": 0.785194,
+      "dth": 0.0529221,
+      "IL": 0.25791,
+      "erCross": 44.6166
+    },
+    {
+      "a1": 0.787478,
+      "a2": 0.784093,
+      "dth": 0.0110237,
+      "IL": 0.258963,
+      "erCross": 52.0719
+    },
+    {
+      "a1": 0.783831,
+      "a2": 0.772418,
+      "dth": -0.00545758,
+      "IL": 0.25449,
+      "erCross": 36.1945
+    },
+    {
+      "a1": 0.780155,
+      "a2": 0.786206,
+      "dth": -0.00612265,
+      "IL": 0.256848,
+      "erCross": 46.314
+    }
+  ],
+  "die_um": {
+    "W": 69564.5,
+    "H": 9728
+  },
+  "tiles": {
+    "plate": "lcos",
+    "px": 0.667014,
+    "tw": 2774.78,
+    "th": 1643.52,
+    "nx": 26,
+    "ny": 6,
+    "count": 156,
+    "slmPix": [
+      4160,
+      2464
+    ],
+    "demag": 5.60708
+  },
+  "accuracy": [
+    {
+      "core": 0,
+      "weights": "dct",
+      "fidelity_calibrated": 0.998328,
+      "enob_calibrated": 4.90536,
+      "fidelity_uncalibrated": 0.000872591,
+      "enob_uncalibrated": -0.348608
+    },
+    {
+      "core": 1,
+      "weights": "random:1",
+      "fidelity_calibrated": 0.998543,
+      "enob_calibrated": 4.96607,
+      "fidelity_uncalibrated": 0.00619367,
+      "enob_uncalibrated": -0.375385
+    },
+    {
+      "core": 2,
+      "weights": "random:2",
+      "fidelity_calibrated": 0.998135,
+      "enob_calibrated": 4.83811,
+      "fidelity_uncalibrated": 0.000485398,
+      "enob_uncalibrated": -0.361325
+    },
+    {
+      "core": 3,
+      "weights": "hadamard",
+      "fidelity_calibrated": 0.9985,
+      "enob_calibrated": 4.79386,
+      "fidelity_uncalibrated": 0.0000200356,
+      "enob_uncalibrated": -0.338675
+    }
+  ],
+  "performance": {
+    "N": 16,
+    "K": 4,
+    "lambdas": 1,
+    "macs": 10240000000000,
+    "ops": 20480000000000,
+    "P": {
+      "laser": 0.4,
+      "modulators": 0.64,
+      "dacs": 0.64,
+      "receivers": 1.6,
+      "weights": 0,
+      "thermal": 2
+    },
+    "total": 5.28,
+    "topsW": 3.87879,
+    "pJperMAC": 0.515625,
+    "nMzi": 1024,
+    "si": {
+      "weights": 40.96,
+      "total": 46.24,
+      "topsW": 0.442907,
+      "area_mm2": 30.72
+    },
+    "gpu": {
+      "name": "NVIDIA H100 SXM (INT8 dense)",
+      "topsW": 2.82714,
+      "tops": 1979,
+      "watts": 700
+    },
+    "die": {
+      "W": 69.5645,
+      "H": 9.728,
+      "area": 676.724
+    },
+    "latency_ns": 0.419539,
+    "enob": 4.79386
+  }
+}

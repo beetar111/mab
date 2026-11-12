@@ -1,0 +1,586 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Optical GPU Designer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: EDA tool. Left: design rail (blocks, platform, process, system). Right: tabbed views (system → verify → floorplan → plate → performance → build → export). */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #16202b; --muted: #5a6877; --line: #d3dae2;
+  --accent: #0f6fd6; --si: #8a5cf6; --gpu: #6b7684; --hot: #d9480f; --good: #1b8a4c; --warn: #b7791f; --bad: #c92a2a;
+  --scope: #0b1118;
+  --f-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --panel: #161e27; --ink: #e3e9ef; --muted: #93a2b2; --line: #2a3542;
+  --accent: #5aa9ff; --si: #b79bff; --gpu: #9aa6b4; --hot: #ff8a4c; --good: #4fd08a; --warn: #f0b252; --bad: #ff6b6b; --scope: #070b10; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #161e27; --ink: #e3e9ef; --muted: #93a2b2; --line: #2a3542;
+  --accent: #5aa9ff; --si: #b79bff; --gpu: #9aa6b4; --hot: #ff8a4c; --good: #4fd08a; --warn: #f0b252; --bad: #ff6b6b; --scope: #070b10; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14.5px; line-height: 1.5; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 48px; }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font-family: var(--f-display); font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 0 0 4px; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-size: 1rem; margin: 0; }
+h3 { font-family: var(--f-display); font-size: 0.9rem; margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+header p { margin: 0; color: var(--muted); max-width: 90ch; }
+.app { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.rail { display: grid; gap: 12px; }
+.ctl { display: grid; gap: 3px; min-width: 0; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ctl .v { font-family: var(--f-mono); color: var(--accent); }
+.ctl small, .cap { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=number] { width: 100%; }
+select, button, input[type=number] { font: inherit; font-size: 13px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+select { width: 100%; }
+button { cursor: pointer; } button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); font-weight: 600; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.blocks { display: grid; gap: 6px; }
+.blk { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 6px 8px; background: var(--bg); }
+.blk .nm { font-weight: 600; font-size: 13px; } .blk .ds { font-size: 11.5px; color: var(--muted); }
+.blk .bt { display: flex; gap: 3px; } .blk .bt button { padding: 2px 7px; font-size: 12px; }
+.palette { display: flex; flex-wrap: wrap; gap: 5px; } .palette button { font-size: 12px; padding: 3px 8px; }
+.corelist { display: grid; gap: 6px; }
+.corerow { display: grid; grid-template-columns: 58px 1fr auto; gap: 6px; align-items: center; font-size: 13px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.tabs button { border: 1px solid transparent; background: transparent; font-family: var(--f-display); font-size: 13.5px; padding: 6px 11px; }
+.tabs button.on { background: var(--panel); border-color: var(--line); color: var(--accent); }
+.status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bar { height: 6px; width: 160px; background: var(--line); border-radius: 3px; overflow: hidden; } .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+canvas.dark { background: var(--scope); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; display: grid; gap: 1px; }
+.kpi .k { font-family: var(--f-mono); font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.kpi .val { font-family: var(--f-display); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: 12px; color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td.num { font-family: var(--f-mono); }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.tag.ok { color: var(--good); } .tag.bad { color: var(--bad); } .tag.mid { color: var(--warn); } .tag.acc { color: var(--accent); }
+.steps { counter-reset: s; display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 10px; }
+.steps > li::before { content: counter(s); font-family: var(--f-display); font-size: 15px; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; }
+.steps p, .steps ul { margin: 2px 0 0; } .steps ul { padding-left: 1.1em; }
+pre.code { font-family: var(--f-mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; max-height: 360px; margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.sw { display: inline-block; width: 14px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.notes p, .notes li { max-width: 85ch; } .notes a { color: var(--accent); } .notes ol li { margin-bottom: 4px; font-size: 13.5px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Light-written photonics · v3 · design → verify → plate → build</div>
+    <h1>Optical GPU Designer</h1>
+    <p>Design an array of optical tensor cores from blocks, verify it with physics simulation, and compile it into the light patterns that write it: frames for a programmable plate (DMD or LCoS phase SLM) or a printable Fresnel plate, plus a GDSII file and a build plan. Every number on this page comes from the same engine as the command-line compiler <code>tools/run.js</code>.</p>
+  </header>
+
+  <div class="app">
+    <aside class="rail" aria-label="Design">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2>Design</h2><button class="primary" id="runBtn">Compile &amp; simulate</button></div>
+        <div class="status"><span id="status">Starting…</span><span class="bar"><i id="prog"></i></span></div>
+        <div class="ctl"><label for="d-name">Name</label><input id="d-name" type="text" style="font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)"></div>
+        <div class="ctl"><label for="d-plat">Light-writable platform</label><select id="d-plat"></select><small id="platNote"></small></div>
+        <div class="row2">
+          <div class="ctl"><label for="d-N">Core size N</label><select id="d-N"><option>4</option><option>8</option><option>16</option><option>32</option></select></div>
+          <div class="ctl"><label for="d-real">BPM realizations</label><select id="d-real"><option>4</option><option selected>6</option><option>10</option></select></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Core pipeline (blocks)</h2>
+        <div class="blocks" id="blocks"></div>
+        <div class="palette" id="palette"></div>
+        <small id="pipeMsg"></small>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center"><h2>Cores</h2><span><button id="addCore">+ core</button> <button id="rmCore">− core</button></span></div>
+        <div class="corelist" id="cores"></div>
+      </div>
+      <div class="card">
+        <h2>Writing process</h2>
+        <div class="ctl"><label for="p-plate">Plate</label><select id="p-plate"><option value="lcos">LCoS phase SLM (holographic Fresnel plate)</option><option value="dmd">DMD (direct imaging)</option></select></div>
+        <div class="row2">
+          <div class="ctl"><label for="p-frames"><span>Frames averaged</span><span class="v" id="v-frames"></span></label><input type="range" id="p-frames" min="1" max="32" step="1"></div>
+          <div class="ctl"><label for="p-NA"><span>Projector NA</span><span class="v" id="v-NA"></span></label><input type="range" id="p-NA" min="0.1" max="0.8" step="0.01"></div>
+        </div>
+        <div class="ctl"><label for="p-drift"><span>Illumination drift (rms)</span><span class="v" id="v-drift"></span></label><input type="range" id="p-drift" min="0" max="0.04" step="0.001"></div>
+      </div>
+      <div class="card">
+        <h2>System</h2>
+        <div class="row2">
+          <div class="ctl"><label for="s-rate">Symbol rate (GHz)</label><input type="number" id="s-rate" min="1" max="100" step="1"></div>
+          <div class="ctl"><label for="s-wl">Wavelengths (WDM)</label><input type="number" id="s-wl" min="1" max="16" step="1"></div>
+          <div class="ctl"><label for="s-laser">Laser per core (mW)</label><input type="number" id="s-laser" min="1" max="500" step="1"></div>
+          <div class="ctl"><label for="s-adc">ADC / DAC bits</label><input type="number" id="s-adc" min="4" max="12" step="1"></div>
+        </div>
+        <small>Energy per symbol (pJ): modulator <span id="e-mod"></span>, DAC <span id="e-dac"></span>, TIA <span id="e-tia"></span>, ADC <span id="e-adc"></span>. Edit them in the design JSON (Export tab).</small>
+      </div>
+    </aside>
+
+    <main style="display:grid;gap:12px;min-width:0">
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button data-tab="sys" class="on">System</button><button data-tab="ver">Verify</button><button data-tab="fp">Floorplan</button><button data-tab="pl">Plate</button><button data-tab="perf">Performance</button><button data-tab="build">Build</button><button data-tab="exp">Export</button><button data-tab="notes">Notes</button>
+      </nav>
+
+      <section id="t-sys" class="card">
+        <h2>System architecture</h2>
+        <canvas id="cvSys" class="dark" width="1000" height="520"></canvas>
+        <div class="cap" id="sysCap"></div>
+        <div class="tiles" id="kpis"></div>
+      </section>
+
+      <section id="t-ver" hidden style="display:grid;gap:12px">
+        <div class="card"><h2>Accuracy of every core (after writing, measurement and calibration)</h2><div class="tablewrap"><table id="accTbl"></table></div><div class="cap">ENOB = effective number of bits of y = W·x against the exact result. The run includes BPM-measured device errors, weight-level quantization, receiver noise and converter quantization.</div></div>
+        <div class="card">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><h2 style="margin-right:auto">Core detail</h2><select id="verCore" style="width:auto"></select><select id="verCal" style="width:auto"><option value="cal">calibrated</option><option value="uncal">uncalibrated</option></select></div>
+          <div class="grid3">
+            <div><h3>Target W (scaled)</h3><canvas id="cvW" width="256" height="256"></canvas></div>
+            <div><h3>Realized (real part, after detection)</h3><canvas id="cvWr" width="256" height="256"></canvas></div>
+            <div><h3>Measured vs exact output</h3><canvas id="cvSc" width="300" height="300"></canvas></div>
+          </div>
+          <div class="legend"><span><span class="sw" style="background:#3a7bd5"></span>negative</span><span><span class="sw" style="background:#e45d2f"></span>positive</span><span>Heat maps share one colour scale.</span></div>
+        </div>
+        <div class="card">
+          <h2>Workload: an image through the optical core</h2>
+          <div class="cap">Each row of a 96×96 test image is cut into N-pixel vectors, multiplied by W on the selected core (optically, with all errors), then inverted exactly in software. Optical errors show up as reconstruction noise.</div>
+          <div class="grid3">
+            <div><h3>Input</h3><canvas id="cvI0" width="96" height="96" style="image-rendering:pixelated"></canvas></div>
+            <div><h3>Optical W·x (normalized)</h3><canvas id="cvI1" width="96" height="96" style="image-rendering:pixelated"></canvas></div>
+            <div><h3>Reconstructed W⁻¹·(optical)</h3><canvas id="cvI2" width="96" height="96" style="image-rendering:pixelated"></canvas></div>
+          </div>
+          <div id="imgStat" class="cap"></div>
+        </div>
+        <div class="card"><h2>Measured MZI cell (BPM realizations of the written device)</h2><div class="tablewrap"><table id="poolTbl"></table></div></div>
+      </section>
+
+      <section id="t-fp" hidden class="card">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><h2 style="margin-right:auto">Floorplan (compiled layout)</h2>
+          <label class="cap" for="zoom">zoom</label><input type="range" id="zoom" min="0" max="1" step="0.001" value="0" style="width:200px">
+          <button id="zoomMzi">Zoom to first MZI</button><button id="zoomAll">Fit die</button></div>
+        <canvas id="cvFp" class="dark" width="1000" height="560"></canvas>
+        <div class="legend"><span><span class="sw" style="background:#6fa8ff"></span>written waveguide</span><span><span class="sw" style="background:#ffb03b"></span>weight patch (colour = dose)</span><span><span class="sw" style="background:#fff"></span>fiducial</span><span>Drag to pan. Blocks are labelled per core.</span></div>
+        <div class="cap" id="fpCap"></div>
+      </section>
+
+      <section id="t-pl" hidden style="display:grid;gap:12px">
+        <div class="card">
+          <h2>Exposure tiles</h2>
+          <canvas id="cvTiles" class="dark" width="1000" height="200"></canvas>
+          <div class="cap" id="tileCap">Click a tile to inspect it.</div>
+        </div>
+        <div class="grid3">
+          <div class="card"><h3>DMD frame (programmable plate, direct imaging)</h3><canvas id="cvDmd" class="dark" width="512" height="320"></canvas><div class="cap" id="dmdCap"></div></div>
+          <div class="card"><h3>Fresnel phase plate (LCoS or printed DOE)</h3><canvas id="cvHolo" class="dark" width="512" height="512"></canvas><div class="cap" id="holoCap">Press "Compute plate" (Gerchberg–Saxton, 512², in your browser).</div><button id="holoBtn">Compute plate for this tile</button></div>
+          <div class="card"><h3>Light it projects (simulated)</h3><canvas id="cvRec" class="dark" width="512" height="512"></canvas><div class="cap" id="recCap"></div></div>
+        </div>
+        <div class="card"><h2>Which plate to use</h2><div class="tablewrap"><table id="plateTbl"></table></div></div>
+      </section>
+
+      <section id="t-perf" hidden style="display:grid;gap:12px">
+        <div class="tiles" id="perfKpis"></div>
+        <div class="grid2">
+          <div class="card"><h2>Power breakdown (W)</h2><canvas id="cvPow" width="600" height="300"></canvas></div>
+          <div class="card"><h2>Efficiency (TOPS/W)</h2><canvas id="cvEff" width="600" height="300"></canvas></div>
+        </div>
+        <div class="card"><h2>Scaling with core size N (same platform, model)</h2><canvas id="cvScale" width="1000" height="320"></canvas><div class="cap">Light-written weights hold their value at zero power, so efficiency keeps improving as N grows: converter energy per MAC falls as 1/N. Thermo-optic weights grow as N², which caps silicon-photonics meshes. Die length grows as N, which is the main cost of weak index contrast.</div></div>
+        <div class="card"><h2>Where light-written beats silicon, and where it does not</h2><div class="tablewrap"><table id="advTbl"></table></div></div>
+      </section>
+
+      <section id="t-build" hidden class="card">
+        <h2>How to build it (generated from this design)</h2>
+        <ol class="steps" id="buildSteps"></ol>
+        <h2 style="margin-top:8px">Bill of materials (equipment classes)</h2>
+        <div class="tablewrap"><table id="bomTbl"></table></div>
+        <div class="cap">The full procedure with safety, calibration and test details is in <code>optical-gpu/docs/BUILD.md</code> in the repository.</div>
+      </section>
+
+      <section id="t-exp" hidden style="display:grid;gap:12px">
+        <div class="card">
+          <h2>Export</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button id="xJson">Design file (.json)</button><button id="xGds">Layout (.gds)</button><button id="xCsv">Weight program (.csv)</button><button id="xDmd">Selected DMD frame (.png)</button><button id="xHolo">Selected Fresnel plate (.png)</button><button id="xCopy">Copy design JSON</button>
+          </div>
+          <div class="cap" id="expMsg">Downloads work when this page is opened from the repository (<code>optical-gpu/designer/index.html</code>). The Claude viewer blocks downloads, so use "Copy design JSON" there or run the command-line compiler, which writes every file:</div>
+          <pre class="code">cd optical-gpu
+node tools/run.js designs/ogpu-1.json build/ogpu-1 --all-tiles</pre>
+        </div>
+        <div class="card"><h2>Design file</h2><pre class="code" id="jsonView"></pre></div>
+      </section>
+
+      <section id="t-notes" hidden class="card notes">
+        <h2>What this is, honestly</h2>
+        <p>An "optical GPU" here means an array of analog optical tensor cores. Each one computes y = W·x for an N×N matrix in a single pass of light, at the modulator symbol rate. Control flow, memory, nonlinear activations and accumulation stay in an electronic host (FPGA or ASIC). That is how every photonic AI accelerator is built. The precision is about 4–6 effective bits, which suits inference workloads that tolerate low precision.</p>
+        <h2>The method</h2>
+        <ul>
+          <li><strong>Matrix → mesh.</strong> W = U·Σ·Vᵀ (SVD). Vᵀ and U are unitary and are factored into a rectangular mesh of N(N−1)/2 MZIs each (Clements decomposition). Σ is a column of MZI attenuators. When singular values repeat, the free rotation in the SVD is randomized, so no switch sits at an exact bar or cross state.</li>
+          <li><strong>Device physics.</strong> A mode solver and split-step BPM design the cell (single-mode width, 50:50 coupler, bends at the bend-loss limit). The process is centered on written test MZIs. Several noisy writes give the pool of real devices: coupler angles, arm-phase offset and loss.</li>
+          <li><strong>Calibration.</strong> After writing, each MZI is measured. Its phases are re-solved for its real couplers, with leftover phase errors carried forward and absorbed by later shifters and the receiver phase. The weight patches are then rewritten closed-loop. Without calibration, no mesh computes.</li>
+          <li><strong>Layout → plate.</strong> Waveguides are written at half the material's index range, and weight patches use the other half (patch length λ/Δn gives 2π). The die is cut into exposure tiles at a slab pixel of w/4. A DMD images each tile directly, or a phase SLM or printed plate projects it holographically (Gerchberg–Saxton with a lens term = Fresnel plate).</li>
+        </ul>
+        <h2>Not modelled</h2>
+        <ul><li>Vertical confinement: the slab is treated as 2-D with an effective index.</li><li>Thermal crosstalk between patches during writing.</li><li>Crossings: none are needed.</li><li>Wavelength dependence of the couplers, which limits WDM channel count.</li><li>Packaging tolerances.</li><li>Sb₂Se₃ multi-level stability over time.</li></ul>
+        <h2>Sources</h2>
+        <ol>
+          <li>W. R. Clements et al., "Optimal design for universal multiport interferometers," <em>Optica</em> 3, 1460 (2016).</li>
+          <li>Y. Shen et al., "Deep learning with coherent nanophotonic circuits," <em>Nature Photonics</em> 11, 441 (2017).</li>
+          <li>S. Bandyopadhyay, R. Hamerly, D. Englund, "Hardware error correction for programmable photonics," <em>Optica</em> 8, 1247 (2021).</li>
+          <li>R. Hamerly et al., "Asymptotically fault-tolerant programmable photonics," <em>Nature Communications</em> 13, 6831 (2022).</li>
+          <li>W. Bogaerts et al., "Programmable photonic circuits," <em>Nature</em> 586, 207 (2020).</li>
+          <li>M. Delaney et al., "A new family of ultralow loss reversible phase-change materials for photonic integrated circuits: Sb₂S₃ and Sb₂Se₃," <em>Adv. Funct. Mater.</em> 30, 2002447 (2020).</li>
+          <li>C. Wu et al., "Freeform direct-write and rewritable photonic integrated circuits in phase-change thin films," <em>Science Advances</em> 10, eadk1361 (2024).</li>
+          <li>R. Bruck et al., "All-optical spatial light modulator for reconfigurable silicon photonic circuits," <em>Optica</em> 3, 396 (2016).</li>
+          <li>R. W. Gerchberg, W. O. Saxton, <em>Optik</em> 35, 237 (1972); M. Pasienski, B. DeMarco, <em>Opt. Express</em> 16, 2176 (2008).</li>
+          <li>M. D. Feit, J. A. Fleck, <em>Appl. Opt.</em> 17, 3990 (1978): BPM. M. Heiblum, J. H. Harris, <em>IEEE JQE</em> 11, 75 (1975): conformal bend analysis.</li>
+          <li>D. A. B. Miller, "Self-configuring universal linear optical component," <em>Photonics Research</em> 1, 1 (2013).</li>
+          <li>NVIDIA H100 Tensor Core GPU datasheet: INT8 dense ≈ 1,979 TOPS at 700 W (SXM). Check the current version.</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+/*__OTC__*/
+</script>
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 2) => (Math.abs(v) < 1e-12 ? 0 : +v).toFixed(d);
+const tick = () => new Promise(r => setTimeout(r, 0));
+const DEFAULT = /*__DESIGN__*/null;
+let D = JSON.parse(JSON.stringify(DEFAULT));
+let R = null, TILE = { r: 0, c: 0 }, HOLO = null, view = { s: 0, cx: 0, cy: 0 };
+const BLOCKS = {
+  fanin: { nm: "Fiber fan-in", ds: "127 µm fiber pitch → lane pitch, with a graded-dose facet mode converter" },
+  meshV: { nm: "Vᵀ mesh", ds: "N(N−1)/2 MZIs, Clements layout" },
+  sigma: { nm: "Σ attenuators", ds: "one MZI per lane against a terminated dump guide" },
+  meshU: { nm: "U mesh", ds: "N(N−1)/2 MZIs, Clements layout" },
+  phase: { nm: "Phase screen", ds: "one weight patch per lane" },
+  fanout: { nm: "Fiber fan-out", ds: "lane pitch → 127 µm, mode converter" },
+};
+const WOPTS = [["dct", "DCT (orthonormal)"], ["hadamard", "Hadamard"], ["random:1", "random #1"], ["random:2", "random #2"], ["random:3", "random #3"], ["identity", "identity"], ["blur", "3-tap blur"]];
+
+// ---------- rail ----------
+function fillRail() {
+  $("d-name").value = D.name;
+  $("d-plat").innerHTML = Object.entries(OTC.PLATFORMS).map(([k, p]) => `<option value="${k}">${p.name}</option>`).join("");
+  $("d-plat").value = D.platform; $("d-N").value = String(D.N);
+  const p = OTC.PLATFORMS[D.platform];
+  $("platNote").textContent = `n₀ ${p.n0}, Δn ${p.dn}, ${p.rewritable ? "rewritable" : "write-once"}, ${p.volatile ? "volatile" : "non-volatile"}. ${p.notes}`;
+  const pipe = D.cores[0].pipeline;
+  $("blocks").innerHTML = pipe.map((b, i) => `<div class="blk"><div><div class="nm">${i + 1}. ${BLOCKS[b].nm}</div><div class="ds">${BLOCKS[b].ds}</div></div><div class="bt"><button data-a="up" data-i="${i}" aria-label="move up">↑</button><button data-a="dn" data-i="${i}" aria-label="move down">↓</button><button data-a="rm" data-i="${i}" aria-label="remove">✕</button></div></div>`).join("");
+  $("palette").innerHTML = "Add: " + Object.entries(BLOCKS).map(([k, b]) => `<button data-add="${k}">${b.nm}</button>`).join("");
+  const has = t => pipe.includes(t);
+  $("pipeMsg").innerHTML = has("meshV") && has("sigma") && has("meshU") ? '<span class="tag ok">arbitrary W</span> Vᵀ → Σ → U realizes any real matrix.'
+    : has("meshU") || has("meshV") ? '<span class="tag mid">unitary only</span> Without Vᵀ, Σ and U together, W is replaced by its closest unitary.'
+    : '<span class="tag bad">no mesh</span> Add mesh blocks.';
+  $("cores").innerHTML = D.cores.map((c, i) => `<div class="corerow"><span>core${i}</span><select data-core="${i}">${WOPTS.map(o => `<option value="${o[0]}"${o[0] === c.weights ? " selected" : ""}>${o[1]}</option>`).join("")}</select><span class="cap">W</span></div>`).join("");
+  const pr = D.process;
+  $("p-plate").value = pr.plate; $("p-frames").value = pr.frames; $("v-frames").textContent = pr.frames; $("p-NA").value = pr.projNA; $("v-NA").textContent = fmt(pr.projNA, 2); $("p-drift").value = pr.drift; $("v-drift").textContent = fmt(100 * pr.drift, 1) + "%";
+  const s = D.system; $("s-rate").value = s.symbolRate_GHz; $("s-wl").value = s.wavelengths; $("s-laser").value = s.laserPerCore_mW; $("s-adc").value = s.adcBits;
+  const e = s.energy_pJ; $("e-mod").textContent = e.modulator; $("e-dac").textContent = e.dac; $("e-tia").textContent = e.tia; $("e-adc").textContent = e.adc;
+  $("jsonView").textContent = JSON.stringify(D, null, 2);
+}
+function dirty() { $("status").textContent = "Design changed. Press Compile & simulate."; $("prog").style.width = "0"; $("jsonView").textContent = JSON.stringify(D, null, 2); }
+$("blocks").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const i = +b.dataset.i, p = D.cores[0].pipeline;
+  if (b.dataset.a === "rm") p.splice(i, 1); if (b.dataset.a === "up" && i > 0) [p[i - 1], p[i]] = [p[i], p[i - 1]]; if (b.dataset.a === "dn" && i < p.length - 1) [p[i + 1], p[i]] = [p[i], p[i + 1]];
+  D.cores.forEach(c => c.pipeline = p.slice()); fillRail(); dirty(); });
+$("palette").addEventListener("click", e => { const b = e.target.closest("button[data-add]"); if (!b) return; const p = D.cores[0].pipeline; const at = b.dataset.add === "fanin" ? 0 : p.lastIndexOf("fanout") >= 0 && b.dataset.add !== "fanout" ? p.lastIndexOf("fanout") : p.length; p.splice(at, 0, b.dataset.add); D.cores.forEach(c => c.pipeline = p.slice()); fillRail(); dirty(); });
+$("cores").addEventListener("change", e => { const s = e.target.closest("select"); D.cores[+s.dataset.core].weights = s.value; dirty(); });
+$("addCore").addEventListener("click", () => { if (D.cores.length >= 8) return; D.cores.push({ name: "core" + D.cores.length, weights: "random:" + (D.cores.length + 1), pipeline: D.cores[0].pipeline.slice() }); fillRail(); dirty(); });
+$("rmCore").addEventListener("click", () => { if (D.cores.length <= 1) return; D.cores.pop(); fillRail(); dirty(); });
+$("d-name").addEventListener("input", e => { D.name = e.target.value || "OGPU"; dirty(); });
+$("d-plat").addEventListener("change", e => { D.platform = e.target.value; fillRail(); dirty(); });
+$("d-N").addEventListener("change", e => { D.N = +e.target.value; dirty(); });
+$("p-plate").addEventListener("change", e => { D.process.plate = e.target.value; dirty(); });
+for (const [id, key, f] of [["p-frames", "frames", v => v], ["p-NA", "projNA", v => fmt(v, 2)], ["p-drift", "drift", v => fmt(100 * v, 1) + "%"]]) $(id).addEventListener("input", e => { D.process[key] = +e.target.value; $("v-" + id.split("-")[1]).textContent = f(+e.target.value); dirty(); });
+for (const [id, key] of [["s-rate", "symbolRate_GHz"], ["s-wl", "wavelengths"], ["s-laser", "laserPerCore_mW"]]) $(id).addEventListener("change", e => { D.system[key] = +e.target.value; dirty(); });
+$("s-adc").addEventListener("change", e => { D.system.adcBits = D.system.dacBits = +e.target.value; dirty(); });
+$("runBtn").addEventListener("click", () => compileRun());
+
+// ---------- run ----------
+let JOB = 0;
+async function compileRun() {
+  const my = ++JOB;
+  $("runBtn").disabled = true;
+  try {
+    const design = JSON.parse(JSON.stringify(D));
+    R = await OTC.run(design, { realizations: +$("d-real").value, samples: 200, log: (m, p) => { $("status").textContent = m; if (p !== undefined) $("prog").style.width = (100 * p).toFixed(0) + "%"; }, tick });
+    if (my !== JOB) return;
+    HOLO = null; TILE = { r: Math.floor(R.tiles.ny / 2), c: 1 }; view = { s: 0, cx: R.layout.die.W / 2, cy: R.layout.die.H / 2 };
+    $("verCore").innerHTML = D.cores.map((c, i) => `<option value="${i}">core${i} · ${c.weights}</option>`).join("");
+    renderAll();
+    $("status").textContent = `Compiled ${D.name}: ${R.layout.paths.length} paths, ${R.layout.patches.length} weight patches.`;
+  } catch (err) { $("status").textContent = "Error: " + err.message; console.error(err); }
+  $("runBtn").disabled = false;
+}
+function renderAll() { renderSys(); renderVer(); renderFp(); renderTiles(); renderPerf(); renderBuild(); $("jsonView").textContent = JSON.stringify(D, null, 2); }
+
+// ---------- drawing helpers ----------
+function hidpi(cv, aspect) { const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth || cv.width; cv.width = Math.round(W * dpr); cv.height = Math.round(W * aspect * dpr); return { ctx: cv.getContext("2d"), dpr, W: cv.width, H: cv.height }; }
+function box(ctx, x, y, w, h, fill, stroke, text, sub, dpr, tc) {
+  ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = 1.2 * dpr; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 5 * dpr) : ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = tc || "#e3e9ef"; ctx.textAlign = "center"; ctx.font = `600 ${11.5 * dpr}px "IBM Plex Sans", sans-serif`; ctx.fillText(text, x + w / 2, y + h / 2 + (sub ? -2 : 4) * dpr);
+  if (sub) { ctx.font = `${10 * dpr}px "IBM Plex Mono", monospace`; ctx.fillStyle = "#93a2b2"; ctx.fillText(sub, x + w / 2, y + h / 2 + 12 * dpr); }
+}
+function arrow(ctx, x0, y0, x1, y1, c, dpr, lw = 1.5) { ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = lw * dpr; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); const a = Math.atan2(y1 - y0, x1 - x0), h = 6 * dpr; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(a - .4), y1 - h * Math.sin(a - .4)); ctx.lineTo(x1 - h * Math.cos(a + .4), y1 - h * Math.sin(a + .4)); ctx.fill(); }
+
+// ---------- system view ----------
+function renderSys() {
+  const { ctx, dpr, W, H } = hidpi($("cvSys"), 0.52), K = D.cores.length, pipe = D.cores[0].pipeline, s = D.system;
+  ctx.fillStyle = "#0b1118"; ctx.fillRect(0, 0, W, H);
+  const u = W / 1000, y0 = 60 * u, rowH = Math.min(90 * u, (H - 110 * u) / K);
+  ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`; ctx.fillStyle = "#93a2b2"; ctx.textAlign = "left";
+  ctx.fillText("off-chip optics & electronics", 14 * u, 22 * u); ctx.fillText(`light-written chip · ${OTC.PLATFORMS[D.platform].short}`, 330 * u, 22 * u); ctx.fillText("detection & host", 800 * u, 22 * u);
+  ctx.strokeStyle = "#5aa9ff"; ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.strokeRect(318 * u, 32 * u, 460 * u, H - 44 * u); ctx.setLineDash([]);
+  box(ctx, 14 * u, H / 2 - 30 * u, 90 * u, 60 * u, "#16202b", "#ff8a4c", "Laser 1550", "narrow-line", dpr);
+  box(ctx, 120 * u, H / 2 - 30 * u, 70 * u, 60 * u, "#16202b", "#93a2b2", "Splitter", `1→${K}+LO`, dpr);
+  arrow(ctx, 104 * u, H / 2, 120 * u, H / 2, "#ff8a4c", dpr);
+  for (let k = 0; k < K; k++) {
+    const yc = y0 + rowH * (k + 0.5);
+    box(ctx, 205 * u, yc - rowH * 0.34, 100 * u, rowH * 0.68, "#16202b", "#93a2b2", `${D.N}× modulators`, `DAC ${s.dacBits}b · ${s.symbolRate_GHz} GHz`, dpr);
+    arrow(ctx, 190 * u, H / 2, 205 * u, yc, "#ff8a4c", dpr, 1);
+    let x = 330 * u; const bw = (440 * u - (pipe.length - 1) * 6 * u) / pipe.length;
+    arrow(ctx, 305 * u, yc, 330 * u, yc, "#ff8a4c", dpr);
+    pipe.forEach((b, i) => { box(ctx, x, yc - rowH * 0.34, bw, rowH * 0.68, "#10233a", "#5aa9ff", BLOCKS[b].nm, i === 0 ? `core${k}: ${D.cores[k].weights}` : "", dpr); if (i) arrow(ctx, x - 6 * u, yc, x, yc, "#5aa9ff", dpr, 1); x += bw + 6 * u; });
+    box(ctx, 790 * u, yc - rowH * 0.34, 110 * u, rowH * 0.68, "#16202b", "#93a2b2", `${D.N}× coherent Rx`, `ADC ${s.adcBits}b`, dpr);
+    arrow(ctx, 770 * u, yc, 790 * u, yc, "#ff8a4c", dpr);
+    arrow(ctx, 900 * u, yc, 915 * u, H / 2, "#93a2b2", dpr, 1);
+  }
+  box(ctx, 915 * u, H / 2 - 45 * u, 75 * u, 90 * u, "#16202b", "#4fd08a", "Host", "FPGA/ASIC", dpr);
+  ctx.strokeStyle = "rgba(255,138,76,0.5)"; ctx.setLineDash([3 * dpr, 4 * dpr]); ctx.lineWidth = dpr; ctx.beginPath(); ctx.moveTo(155 * u, H / 2 + 30 * u); ctx.lineTo(155 * u, H - 10 * u); ctx.lineTo(845 * u, H - 10 * u); ctx.lineTo(845 * u, y0 + rowH * (K - 0.5) + rowH * 0.34); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#ff8a4c"; ctx.textAlign = "left"; ctx.font = `${10 * dpr}px "IBM Plex Mono", monospace`; ctx.fillText("local oscillator (same laser) → coherent receivers", 200 * u, H - 14 * u);
+  const p = R ? R.perf : null;
+  $("sysCap").textContent = `The chip itself is passive, with no metal and no electronics. Light patterns write both the waveguides and the weights. Inputs enter as modulated light through a fiber array; outputs leave to coherent receivers that share the laser as reference, so signed results are measured directly.`;
+  if (!p) return;
+  const k = (t, v, sub) => `<div class="kpi"><span class="k">${t}</span><span class="val">${v}</span><span class="sub">${sub}</span></div>`;
+  $("kpis").innerHTML = k("Throughput", `${fmt(p.ops / 1e12, 1)} TOPS`, `${p.K} cores × ${p.N}² MAC × ${D.system.symbolRate_GHz} GHz`) +
+    k("Efficiency", `${fmt(p.topsW, 1)} TOPS/W`, `${fmt(p.total, 2)} W total`) + k("Precision", `${fmt(p.enob, 1)} bits`, "worst core, calibrated") +
+    k("Die", `${fmt(p.die.W, 1)} × ${fmt(p.die.H, 1)} mm`, `${p.nMzi} MZIs, weights hold at 0 W`) + k("Latency", `${fmt(p.latency_ns, 2)} ns`, "light transit through the die");
+}
+
+// ---------- verify ----------
+function heat(cv, M, scale) {
+  const n = M.length, { ctx, W, H } = hidpi(cv, 1), cw = W / n;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const v = Math.max(-1, Math.min(1, M[i][j] / scale)), a = Math.abs(v); ctx.fillStyle = v >= 0 ? `rgb(${Math.round(240 - 12 * a)},${Math.round(240 - 147 * a)},${Math.round(240 - 193 * a)})` : `rgb(${Math.round(240 - 182 * a)},${Math.round(240 - 117 * a)},${Math.round(240 - 27 * a)})`; ctx.fillRect(j * cw, i * cw, cw + 0.5, cw + 0.5); }
+}
+function renderVer() {
+  if (!R) return;
+  const rows = R.acc.map((a, i) => { const c = a.cal, u = a.uncal, okc = c.run.enob >= 4;
+    return `<tr><td>core${i}</td><td>${D.cores[i].weights}</td><td class="num">${fmt(c.fid, 4)}</td><td class="num">${fmt(c.run.enob, 2)} <span class="tag ${okc ? "ok" : "mid"}">${okc ? "computes" : "marginal"}</span></td><td class="num">${fmt(u.fid, 4)}</td><td class="num">${fmt(u.run.enob, 2)} <span class="tag bad">fails</span></td></tr>`; }).join("");
+  $("accTbl").innerHTML = `<tr><th>Core</th><th>W</th><th>Fidelity (cal.)</th><th>ENOB (cal.)</th><th>Fidelity (uncal.)</th><th>ENOB (uncal.)</th></tr>` + rows +
+    `<tr><td colspan="6" class="cap">Receiver SNR ${fmt(R.rx.snrDb, 1)} dB at ${fmt(R.rx.Ps * 1e6, 1)} µW per output (path loss ${fmt(R.pathIL, 1)} dB incl. two facets). Weight levels: 1/${OTC.PLATFORMS[D.platform].levels} of 2π, written closed-loop.</td></tr>`;
+  const ci = +$("verCore").value || 0, mode = $("verCal").value, a = R.acc[ci][mode], prog = R.progs[ci];
+  const sc = Math.max(...prog.target.flat().map(Math.abs));
+  heat($("cvW"), prog.target, sc); heat($("cvWr"), a.real.Teff.map(r => r.map(v => v[0])), sc);
+  // scatter
+  const { ctx, dpr, W, H } = hidpi($("cvSc"), 1), pairs = a.run.pairs; let m = 0; for (const p of pairs) m = Math.max(m, Math.abs(p[0]), Math.abs(p[1]));
+  ctx.clearRect(0, 0, W, H); ctx.strokeStyle = css("--line"); ctx.lineWidth = dpr; ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(W, 0); ctx.stroke();
+  ctx.fillStyle = css("--accent"); for (const p of pairs) { ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc((p[0] / m + 1) / 2 * W, (1 - (p[1] / m + 1) / 2) * H, 1.8 * dpr, 0, 7); ctx.fill(); } ctx.globalAlpha = 1;
+  ctx.fillStyle = css("--muted"); ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`; ctx.fillText("exact →", W - 64 * dpr, H - 6 * dpr); ctx.fillText("↑ optical", 6 * dpr, 14 * dpr);
+  // image workload
+  const N = D.N, img = testImage(96), rnd = OTC.rng(9), real = a.real, inv = pinv(prog.target);
+  const out = new Float64Array(96 * 96), rec = new Float64Array(96 * 96);
+  const FS = prog.target.map(row => Math.min(row.reduce((s, v) => s + Math.abs(v), 0), 4 * Math.sqrt(row.reduce((s, v) => s + v * v, 0)) / Math.sqrt(3)) || 1);
+  const L = Math.pow(2, D.system.adcBits - 1) - 1;
+  for (let y = 0; y < 96; y++) for (let x0 = 0; x0 + N <= 96; x0 += N) {
+    const xv = []; for (let j = 0; j < N; j++) xv.push(2 * img[y * 96 + x0 + j] - 1);
+    const yv = [];
+    for (let i = 0; i < N; i++) { let c = [0, 0]; for (let j = 0; j < N; j++) c = OTC.C.add(c, OTC.C.scale(real.T[i][j], xv[j])); let v = (c[0] * Math.cos(real.lo[i]) + c[1] * Math.sin(real.lo[i])) * real.gain[i];
+      v = FS[i] * Math.max(-1, Math.min(1, Math.round((v / FS[i] + gauss(rnd) / Math.sqrt(R.rx.snr)) * L) / L)); yv.push(v); out[y * 96 + x0 + i] = v / FS[i]; }
+    for (let j = 0; j < N; j++) { let v = 0; for (let i = 0; i < N; i++) v += inv[j][i] * yv[i]; rec[y * 96 + x0 + j] = (v + 1) / 2; }
+  }
+  gray($("cvI0"), img, 96, v => v); gray($("cvI1"), out, 96, v => (v + 1) / 2); gray($("cvI2"), rec, 96, v => v);
+  let mse = 0; for (let p = 0; p < 96 * 96; p++) mse += (rec[p] - img[p]) ** 2; mse /= 96 * 96;
+  $("imgStat").textContent = `Reconstruction PSNR ${fmt(10 * Math.log10(1 / Math.max(mse, 1e-12)), 1)} dB (${mode}). Above ≈30 dB the image is visually clean; below ≈15 dB it is destroyed.`;
+  const pool = R.stats.pool;
+  $("poolTbl").innerHTML = `<tr><th>#</th><th>α₁ (rad)</th><th>α₂ (rad)</th><th>Arm offset (rad)</th><th>Loss (dB)</th><th>Cross extinction (dB)</th></tr>` + pool.map((p, i) => `<tr><td>${i}</td><td class="num">${fmt(p.a1, 4)}</td><td class="num">${fmt(p.a2, 4)}</td><td class="num">${fmt(p.dth, 3)}</td><td class="num">${fmt(p.IL, 2)}</td><td class="num">${fmt(p.erCross, 1)}</td></tr>`).join("") +
+    `<tr><td colspan="6" class="cap">Ideal α = π/4 = 0.7854. Cell: core ${fmt(R.g.w, 2)} µm, pitch ${fmt(R.g.D, 1)} µm, coupler ${fmt(R.g.L50, 0)} µm, MZI ${fmt(R.g.Lcell, 0)} µm, min bend radius ${fmt(R.g.Rmin / 1000, 2)} mm, blur σ ${fmt(R.g.cfg.blur, 2)} µm, speckle ${fmt(100 * R.g.cfg.sigF, 1)}%. Process centering: test MZIs measured mean α ${R.g.centering.map(c => fmt(c.alphaMean, 4)).join(", ")}, so the coupler length was corrected to ${fmt(R.g.L50, 1)} µm.</td></tr>`;
+}
+function gauss(r) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); }
+function testImage(n) { const a = new Float64Array(n * n); for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const dx = x - n * 0.38, dy = y - n * 0.42, r = Math.hypot(dx, dy); let v = 0.5 + 0.35 * Math.cos(r * 0.45) * Math.exp(-r / 40); if (x > n * 0.62 && y > n * 0.15 && y < n * 0.85) v = (Math.floor(y / 8) % 2) ? 0.9 : 0.15; if (Math.abs(x - y * 0.6 - 10) < 2) v = 1; a[y * n + x] = Math.max(0, Math.min(1, v)); } return a; }
+function gray(cv, a, n, f) { cv.width = n; cv.height = n; const ctx = cv.getContext("2d"), im = ctx.createImageData(n, n); for (let p = 0; p < n * n; p++) { const v = Math.round(255 * Math.max(0, Math.min(1, f(a[p])))); im.data[4 * p] = im.data[4 * p + 1] = im.data[4 * p + 2] = v; im.data[4 * p + 3] = 255; } ctx.putImageData(im, 0, 0); }
+function pinv(T) { const { U, S, V } = OTC.svd(T), n = T.length, smax = Math.max(...S); return Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => { let v = 0; for (let k = 0; k < n; k++) if (S[k] > 1e-6 * smax) v += V[i][k] * U[j][k] / S[k]; return v; })); }
+$("verCore").addEventListener("change", renderVer); $("verCal").addEventListener("change", renderVer);
+
+// ---------- floorplan ----------
+function renderFp() {
+  if (!R) return;
+  const cv = $("cvFp"), { ctx, dpr, W, H } = hidpi(cv, 0.56), L = R.layout;
+  const fit = Math.min(W / L.die.W, H / L.die.H) * 0.96, s = fit * Math.pow(800, view.s);
+  const X = x => W / 2 + (x - view.cx) * s, Y = y => H / 2 + (y - view.cy) * s;
+  ctx.fillStyle = "#0b1118"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = dpr; ctx.strokeRect(X(0), Y(0), L.die.W * s, L.die.H * s);
+  const vx0 = view.cx - W / 2 / s, vx1 = view.cx + W / 2 / s, vy0 = view.cy - H / 2 / s, vy1 = view.cy + H / 2 / s;
+  for (const p of L.paths) {
+    const a = p.pts[0], b = p.pts[p.pts.length - 1]; if (Math.max(a[0], b[0]) < vx0 || Math.min(a[0], b[0]) > vx1) continue;
+    ctx.strokeStyle = `rgba(111,168,255,${0.35 + 0.65 * p.level})`; ctx.lineWidth = Math.max(dpr * 0.8, p.w * s);
+    ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(X(q[0]), Y(q[1])) : ctx.moveTo(X(q[0]), Y(q[1]))); ctx.stroke();
+  }
+  for (const q of L.patches) { if (q.x1 < vx0 || q.x0 > vx1 || q.y < vy0 || q.y > vy1) continue; ctx.fillStyle = `rgb(255,${Math.round(230 - 300 * (q.level - 0.5))},60)`; ctx.fillRect(X(q.x0), Y(q.y) - Math.max(1.5 * dpr, q.w * s), Math.max(dpr, (q.x1 - q.x0) * s), Math.max(3 * dpr, 2 * q.w * s)); }
+  for (const m of L.marks) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.moveTo(X(m.x - m.size), Y(m.y)); ctx.lineTo(X(m.x + m.size), Y(m.y)); ctx.moveTo(X(m.x), Y(m.y - m.size)); ctx.lineTo(X(m.x), Y(m.y + m.size)); ctx.stroke(); }
+  ctx.font = `${10.5 * dpr}px "IBM Plex Mono", monospace`; ctx.textAlign = "left";
+  for (const b of L.blocks) { if (b.x1 < vx0 || b.x0 > vx1) continue; ctx.strokeStyle = "rgba(147,162,178,0.5)"; ctx.setLineDash([4 * dpr, 4 * dpr]); ctx.strokeRect(X(b.x0), Y(b.y0), (b.x1 - b.x0) * s, (b.y1 - b.y0) * s); ctx.setLineDash([]); ctx.fillStyle = "#cfd8e3"; if ((b.x1 - b.x0) * s > 50 * dpr) ctx.fillText(`core${b.core} · ${BLOCKS[b.type].nm}`, Math.max(X(b.x0), 4 * dpr) + 4 * dpr, Y(b.y0) + 13 * dpr); }
+  // scale bar
+  const sb = Math.pow(10, Math.floor(Math.log10(W * 0.2 / s))); ctx.fillStyle = "#fff"; ctx.fillRect(16 * dpr, H - 20 * dpr, sb * s, 3 * dpr); ctx.fillText(sb >= 1000 ? `${sb / 1000} mm` : `${sb} µm`, 16 * dpr, H - 26 * dpr);
+  $("fpCap").textContent = `Die ${fmt(L.die.W / 1000, 2)} × ${fmt(L.die.H / 1000, 2)} mm · MZI cell ${fmt(R.g.Lcell, 0)} µm × ${fmt(R.g.D, 1)} µm pitch · ${L.paths.length} waveguide paths · ${L.patches.length} weight patches · 4 fiducials.`;
+}
+$("zoom").addEventListener("input", e => { view.s = +e.target.value; renderFp(); });
+$("zoomAll").addEventListener("click", () => { view = { s: 0, cx: R.layout.die.W / 2, cy: R.layout.die.H / 2 }; $("zoom").value = 0; renderFp(); });
+$("zoomMzi").addEventListener("click", () => { const b = R.layout.blocks.find(q => q.type === "meshV" || q.type === "meshU"); const N = D.N; view.cx = b.x0 + R.g.Lcell * 0.5; view.cy = (b.y0 + b.y1) / 2 - (N / 2 - 1) * R.g.D; const fit = Math.min(1, 1); view.s = Math.log(Math.min(R.layout.die.W / (R.g.Lcell * 0.7), 800)) / Math.log(800); $("zoom").value = view.s; renderFp(); });
+(() => { let drag = null; const cv = $("cvFp");
+  cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", e => { if (!drag || !R) return; const dpr = cv.width / cv.clientWidth, fit = Math.min(cv.width / R.layout.die.W, cv.height / R.layout.die.H) * 0.96, s = fit * Math.pow(800, view.s); view.cx = drag.cx - (e.clientX - drag.x) * dpr / s; view.cy = drag.cy - (e.clientY - drag.y) * dpr / s; renderFp(); });
+  cv.addEventListener("pointerup", () => drag = null); })();
+
+// ---------- plate ----------
+function dmdPlan() { return OTC.tilePlan(R.layout, Object.assign({}, R.proc, { plate: "dmd" })); }
+function renderTiles() {
+  if (!R) return;
+  const cv = $("cvTiles"), L = R.layout, plan = dmdPlan(), aspect = Math.min(0.5, Math.max(0.12, L.die.H / L.die.W));
+  const { ctx, dpr, W, H } = hidpi(cv, aspect), s = Math.min(W / L.die.W, H / L.die.H);
+  ctx.fillStyle = "#0b1118"; ctx.fillRect(0, 0, W, H);
+  for (const p of L.paths) { if (p.kind === "converter" || p.kind === "terminator") continue; ctx.strokeStyle = "rgba(111,168,255,0.6)"; ctx.lineWidth = dpr * 0.6; ctx.beginPath(); ctx.moveTo(p.pts[0][0] * s, p.pts[0][1] * s); ctx.lineTo(p.pts[p.pts.length - 1][0] * s, p.pts[p.pts.length - 1][1] * s); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = dpr * 0.6;
+  for (let r = 0; r <= plan.ny; r++) { ctx.beginPath(); ctx.moveTo(0, r * plan.th * s); ctx.lineTo(plan.nx * plan.tw * s, r * plan.th * s); ctx.stroke(); }
+  for (let c = 0; c <= plan.nx; c++) { ctx.beginPath(); ctx.moveTo(c * plan.tw * s, 0); ctx.lineTo(c * plan.tw * s, plan.ny * plan.th * s); ctx.stroke(); }
+  ctx.strokeStyle = "#ff8a4c"; ctx.lineWidth = 2 * dpr; ctx.strokeRect(TILE.c * plan.tw * s, TILE.r * plan.th * s, plan.tw * s, plan.th * s);
+  const tTot = plan.count * (R.proc.exposure_s + R.proc.settle_s) / 60;
+  $("tileCap").textContent = `DMD tiles: ${plan.nx} × ${plan.ny} = ${plan.count} exposures of ${fmt(plan.tw / 1000, 2)} × ${fmt(plan.th / 1000, 2)} mm (slab pixel ${fmt(plan.px, 3)} µm, demagnification ×${fmt(plan.demag, 1)}). About ${fmt(tTot, 0)} min per die at ${R.proc.exposure_s + R.proc.settle_s} s per tile. Selected tile: row ${TILE.r}, column ${TILE.c}.`;
+  renderDmd();
+  $("plateTbl").innerHTML = `<tr><th>Plate</th><th>How it writes</th><th>Strengths</th><th>Limits</th></tr>
+    <tr><td><strong>DMD</strong> (programmable)</td><td>Images each tile directly. Gray levels come from mirror duty cycle; LED or laser light.</td><td>No speckle with incoherent light (≈1% index noise). Fast frame changes (kHz). Simple optics.</td><td>Only a few % of the light reaches the slab. Needs a demagnifying lens of NA ≥ ${fmt(D.process.projNA, 2)}.</td></tr>
+    <tr><td><strong>LCoS phase SLM</strong> (programmable Fresnel plate)</td><td>Displays the computed phase pattern. The light self-focuses into the tile (lensless at ${fmt(1024 * R.proc.lcos.pitch_um ** 2 / (OTC.PLATFORMS[D.platform].writeNm / 1000) / 1000, 0)} mm for 1024² holograms).</td><td>Nearly all light goes into the pattern. Can focus into several depths at once (3-D circuits). Rewrites at video rate.</td><td>Speckle: ${fmt(100 * 0.075, 1)}% per frame, reduced √M by averaging ${D.process.frames} frames. Holograms take compute time.</td></tr>
+    <tr><td><strong>Printed phase plate</strong> (static DOE)</td><td>The same phase pattern, etched into fused silica as 4–16 levels from the GDS (grayscale or multi-mask lithography).</td><td>One flash writes a whole tile with no SLM. Cheapest per chip, like fiber-grating phase masks.</td><td>Fixed pattern: suits waveguides and fixed weights. Weights are then trimmed with the programmable plate.</td></tr>`;
+}
+function renderDmd() {
+  const plan = dmdPlan(), [pw, ph] = [512, 320], px = plan.tw / pw;
+  const img = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th, pw, ph, px);
+  const cv = $("cvDmd"); cv.width = pw; cv.height = ph; const ctx = cv.getContext("2d"), im = ctx.createImageData(pw, ph);
+  for (let p = 0; p < pw * ph; p++) { im.data[4 * p] = im.data[4 * p + 1] = im.data[4 * p + 2] = img[p]; im.data[4 * p + 3] = 255; }
+  ctx.putImageData(im, 0, 0);
+  $("dmdCap").textContent = `Tile r${TILE.r} c${TILE.c}, shown at ${fmt(px, 2)} µm/px (the real frame is ${plan.slmPix[0]}×${plan.slmPix[1]} at ${fmt(plan.px, 3)} µm/px). Gray = write dose: waveguides at ${fmt(100 * OTC.PLATFORMS[D.platform].wgLevel, 0)}%, weight patches brighter.`;
+}
+$("cvTiles").addEventListener("click", e => { if (!R) return; const cv = $("cvTiles"), r = cv.getBoundingClientRect(), L = R.layout, plan = dmdPlan(), s = Math.min(cv.width / L.die.W, cv.height / L.die.H) * cv.clientWidth / cv.width;
+  const c = Math.floor((e.clientX - r.left) / s / plan.tw), rr = Math.floor((e.clientY - r.top) / s / plan.th); if (c >= 0 && c < plan.nx && rr >= 0 && rr < plan.ny) { TILE = { r: rr, c }; HOLO = null; $("holoCap").textContent = 'Press "Compute plate" for this tile.'; renderTiles(); } });
+$("holoBtn").addEventListener("click", async () => {
+  if (!R) return; $("holoCap").textContent = "Computing Gerchberg–Saxton hologram (512², 20 iterations)…"; await tick();
+  const n = 512, plan = dmdPlan(), fill = 0.75, m = Math.round(n * fill), pxh = Math.max(R.layout.pixel, plan.tw / m);
+  const sub = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th + (plan.th - m * pxh) / 2, m, m, pxh), T = new Float64Array(n * n), o = (n - m) / 2;
+  for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) T[(j + o) * n + i + o] = sub[j * m + i] / 255;
+  const H = OTC.hologram(T, n, { iters: 20, fill: 0.8, seed: 5 });
+  const plate = OTC.fresnelPlate(H.phase, n, 256); HOLO = { plate, n };
+  const put = (cv, f) => { cv.width = n; cv.height = n; const ctx = cv.getContext("2d"), im = ctx.createImageData(n, n); for (let p = 0; p < n * n; p++) { const v = f(p); im.data[4 * p] = v[0]; im.data[4 * p + 1] = v[1]; im.data[4 * p + 2] = v[2]; im.data[4 * p + 3] = 255; } ctx.putImageData(im, 0, 0); };
+  put($("cvHolo"), p => [plate[p], plate[p], plate[p]]);
+  put($("cvRec"), p => { const t = Math.min(1, Math.sqrt(H.I[p] / (H.scale * 1.2))); return [255 * Math.min(1, t * 1.5), 255 * Math.max(0, (t - 0.3) * 1.4), 255 * Math.max(0, t - 0.75) * 3]; });
+  $("holoCap").textContent = `Phase 0 → 2π (black → white), 256 levels, with a Fresnel lens term built in. Use it on an LCoS SLM or etch it as a DOE. Single-frame speckle ${fmt(100 * H.sigma, 1)}% rms.`;
+  $("recCap").textContent = `Simulated pump light at the slab. Averaging ${D.process.frames} independent frames brings the speckle to ≈${fmt(100 * H.sigma / Math.sqrt(D.process.frames), 1)}%.`;
+});
+
+// ---------- performance ----------
+function bars(cv, items, unit, log) {
+  const { ctx, dpr, W, H } = hidpi(cv, 0.5); ctx.clearRect(0, 0, W, H);
+  const pl = 150 * dpr, pr = 110 * dpr, bh = Math.min(26 * dpr, (H - 20 * dpr) / items.length - 8 * dpr), mx = Math.max(...items.map(i => i.v));
+  const sx = v => log ? (Math.log10(Math.max(v, 1e-3)) + 3) / (Math.log10(mx) + 3) * (W - pl - pr) : v / mx * (W - pl - pr);
+  ctx.font = `${12 * dpr}px "IBM Plex Sans", sans-serif`;
+  items.forEach((it, k) => { const y = 10 * dpr + k * (bh + 8 * dpr); ctx.fillStyle = css("--ink"); ctx.textAlign = "right"; ctx.fillText(it.k, pl - 8 * dpr, y + bh * 0.7); ctx.fillStyle = it.c; ctx.fillRect(pl, y, Math.max(1, sx(it.v)), bh); ctx.fillStyle = css("--muted"); ctx.textAlign = "left"; ctx.font = `${11.5 * dpr}px "IBM Plex Mono", monospace`; ctx.fillText(`${fmt(it.v, it.v < 10 ? 2 : 1)} ${unit}`, pl + Math.max(1, sx(it.v)) + 6 * dpr, y + bh * 0.7); ctx.font = `${12 * dpr}px "IBM Plex Sans", sans-serif`; });
+}
+function renderPerf() {
+  if (!R) return; const p = R.perf;
+  const k = (t, v, sub) => `<div class="kpi"><span class="k">${t}</span><span class="val">${v}</span><span class="sub">${sub}</span></div>`;
+  $("perfKpis").innerHTML = k("This chip", `${fmt(p.topsW, 1)} TOPS/W`, `${fmt(p.ops / 1e12, 1)} TOPS at ${fmt(p.total, 2)} W, ≈${fmt(p.enob, 1)} bits`) + k("Same mesh in Si photonics", `${fmt(p.si.topsW, 2)} TOPS/W`, `weights hold ${fmt(p.si.weights, 1)} W`) + k(p.gpu.name, `${fmt(p.gpu.topsW, 2)} TOPS/W`, `${p.gpu.tops} TOPS at ${p.gpu.watts} W, exact int8`) + k("Energy per MAC", `${fmt(p.pJperMAC, 3)} pJ`, "wall-plug, including converters");
+  bars($("cvPow"), Object.entries(p.P).map(([kk, v]) => ({ k: kk, v, c: kk === "weights" ? css("--good") : css("--accent") })).concat([{ k: "Si-photonics weights", v: p.si.weights, c: css("--si") }]), "W");
+  bars($("cvEff"), [{ k: "Light-written", v: p.topsW, c: css("--accent") }, { k: "Si-photonics (TO)", v: p.si.topsW, c: css("--si") }, { k: "H100 (int8)", v: p.gpu.topsW, c: css("--gpu") }], "TOPS/W");
+  // scaling
+  const Ns = [4, 8, 16, 32, 64, 128], g = R.g, xs = [], lw = [], ls = [], len = [];
+  for (const n of Ns) { const d = Object.assign({}, R.design, { N: n }), pp = OTC.performance(d, g, null, null); xs.push(n); lw.push(pp.topsW); ls.push(pp.si.topsW); len.push((2 * n * g.Lcell + 12000) / 1000); }
+  const { ctx, dpr, W, H } = hidpi($("cvScale"), 0.32); ctx.clearRect(0, 0, W, H);
+  const pl = 56 * dpr, pr = 64 * dpr, pt = 14 * dpr, pb = 30 * dpr, X = n => pl + (Math.log2(n) - 2) / (Math.log2(128) - 2) * (W - pl - pr);
+  const ymax = Math.max(...lw) * 1.15, Y = v => pt + (H - pt - pb) * (1 - v / ymax), lmax = Math.max(...len) * 1.1, Y2 = v => pt + (H - pt - pb) * (1 - v / lmax);
+  ctx.strokeStyle = css("--line"); ctx.lineWidth = dpr; ctx.font = `${11 * dpr}px "IBM Plex Mono", monospace`; ctx.fillStyle = css("--muted");
+  Ns.forEach(n => { ctx.beginPath(); ctx.moveTo(X(n), pt); ctx.lineTo(X(n), H - pb); ctx.stroke(); ctx.textAlign = "center"; ctx.fillText("N=" + n, X(n), H - 10 * dpr); });
+  ctx.textAlign = "left"; ctx.fillText("TOPS/W", 6 * dpr, pt + 4 * dpr); ctx.textAlign = "right"; ctx.fillText("die length (mm)", W - 4 * dpr, pt + 4 * dpr);
+  const line = (ys, Yf, c, dash) => { ctx.strokeStyle = c; ctx.lineWidth = 2 * dpr; ctx.setLineDash(dash ? [6 * dpr, 4 * dpr] : []); ctx.beginPath(); xs.forEach((n, i) => i ? ctx.lineTo(X(n), Yf(ys[i])) : ctx.moveTo(X(n), Yf(ys[i]))); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = c; xs.forEach((n, i) => { ctx.beginPath(); ctx.arc(X(n), Yf(ys[i]), 3 * dpr, 0, 7); ctx.fill(); }); };
+  line(lw, Y, css("--accent")); line(ls, Y, css("--si")); line(len, Y2, css("--muted"), true);
+  ctx.fillStyle = css("--muted"); ctx.textAlign = "center"; xs.forEach((n, i) => ctx.fillText(`${fmt(len[i], 0)} mm`, X(n), Y2(len[i]) - 8 * dpr));
+  ctx.textAlign = "left"; ctx.fillStyle = css("--accent"); ctx.fillText(`light-written ${fmt(lw[lw.length - 1], 1)}`, X(128) - 150 * dpr, Y(lw[lw.length - 1]) - 8 * dpr); ctx.fillStyle = css("--si"); ctx.fillText("silicon TO", X(128) - 90 * dpr, Y(ls[ls.length - 1]) - 8 * dpr); ctx.fillStyle = css("--muted"); ctx.fillText("die length", X(64) + 6 * dpr, Y2(len[4]) + 14 * dpr);
+  $("advTbl").innerHTML = `<tr><th>Aspect</th><th>Light-written (this design)</th><th>Silicon photonics</th></tr>
+    <tr><td>Making the circuit</td><td>Unpatterned film stack, then a light pattern. No masks; a design change is a new plate pattern.</td><td>Mask set plus a foundry run (weeks to months).</td></tr>
+    <tr><td>Holding the weights</td><td><span class="tag ok">0 W</span> The weight is the written index (non-volatile phase-change material).</td><td><span class="tag bad">${fmt(p.si.weights, 1)} W</span> Heaters must stay on. This dominates at large N.</td></tr>
+    <tr><td>Fixing defects</td><td>Measure, then re-expose just that patch (write–verify).</td><td>Only by trimming phases; a broken device stays broken.</td></tr>
+    <tr><td>Die size limit</td><td>None from the exposure field: tiles stitch to wafer scale.</td><td>Reticle limit ≈ 26 × 33 mm without stitching.</td></tr>
+    <tr><td>Fiber coupling</td><td>Graded-dose mode converter written at the facet.</td><td>Needs spot-size converters or grating couplers.</td></tr>
+    <tr><td>Footprint</td><td><span class="tag bad">large</span> MZI ${fmt(R.g.Lcell / 1000, 2)} mm, because index contrast is ≈${(Math.abs(OTC.PLATFORMS[D.platform].dn) * OTC.PLATFORMS[D.platform].wgLevel).toExponential(0)}.</td><td><span class="tag ok">small</span> MZI ≈0.1–0.3 mm.</td></tr>
+    <tr><td>Weight update speed</td><td><span class="tag mid">ms–s</span> per tile (writing), so best for inference with stationary weights.</td><td>µs (thermal) to ns (electro-optic).</td></tr>
+    <tr><td>Process maturity</td><td><span class="tag bad">research</span> Multi-level phase-change stability and writing uniformity still need proof.</td><td><span class="tag ok">foundry PDKs</span></td></tr>`;
+}
+
+// ---------- build ----------
+function renderBuild() {
+  if (!R) return; const p = OTC.PLATFORMS[D.platform], g = R.g, plan = dmdPlan(), L = R.layout;
+  const steps = [
+    ["Make the blank wafer (standard foundry steps, no patterning)", `<ul>${p.stack.map(s => `<li>${s}</li>`).join("")}</ul><p class="cap">Dice into ${fmt(L.die.W / 1000 + 2, 0)} × ${fmt(L.die.H / 1000 + 2, 0)} mm blanks and polish both end facets before writing. The facet mode converter is written later.</p>`],
+    ["Set up the writing station", `<ul><li>${p.writeNm} nm writing laser (CW for crystallizing, pulsed for erasing), beam expander, homogenizer</li><li>${D.process.plate === "dmd" ? `DMD (${R.proc.dmd.pixels.join("×")}, ${R.proc.dmd.pitch_um} µm)` : `phase-only LCoS SLM (${R.proc.lcos.pixels.join("×")}, ${R.proc.lcos.pitch_um} µm)`} → 4f relay, demagnification ×${fmt(plan.demag, 1)}, objective NA ≥ ${fmt(D.process.projNA, 2)}</li><li>XY air-bearing stage (≥ ${fmt(L.die.W / 1000 + 10, 0)} mm travel, ≤ 50 nm repeatability) with autofocus, fiducial camera and in-line power meter</li></ul>`],
+    ["Calibrate dose to index", `<p>Write test stripes at 16 dose levels and measure their index change with an interferometric microscope or test MZIs. Fit a dose→Δn curve and store it as the plate's gray-level lookup. Then write test MZIs and correct the coupler length (process centering; the simulation's correction was ${fmt(R.g.centering[0] ? (R.g.L50 - R.g.centering[0].L50) : 0, 1)} µm).</p>`],
+    ["Write the die", `<p>Fiducials first. Then ${plan.count} tiles in serpentine order, each with a 2 µm overlap blended linearly between tiles. Waveguides are written at ${fmt(100 * p.wgLevel, 0)}% dose. ${D.process.plate === "lcos" ? `Each tile is the average of ${D.process.frames} hologram frames with independent random phase, to suppress speckle.` : "Gray levels come from mirror PWM."} Estimated ${fmt(plan.count * (R.proc.exposure_s + R.proc.settle_s) / 60, 0)} min per die.</p>`],
+    ["Package", `<p>Align two ${D.N * D.cores.length}-channel fiber arrays (127 µm pitch, PM fiber) to the written facet converters, cure with UV epoxy, and mount on a TEC held at 25.00 ± 0.05 °C. Add a cap or nitrogen purge to protect the film.</p>`],
+    ["Calibrate the cores (write–verify)", `<p>For each MZI, in mesh order: inject light at 1550 nm, measure its splitting through the output fiber array, and fit its coupler angles (expected spread ${fmt(Math.min(...R.stats.pool.map(q => q.a1)), 3)}–${fmt(Math.max(...R.stats.pool.map(q => q.a1)), 3)} rad). Solve hardware-aware phases, then expose the weight patch in small dose steps until the target is reached. Finally fit each receiver's phase and gain against known input vectors. Expected result: ≈${fmt(R.perf.enob, 1)} effective bits.</p>`],
+    ["Run", `<p>The host streams input vectors to the ${D.N * D.cores.length} modulators at ${D.system.symbolRate_GHz} GBd and reads ${D.N * D.cores.length} coherent receivers. To load new weights, re-expose only the weight tiles (${R.layout.patches.length} patches). Wavelength-multiplexed operation multiplies throughput if the couplers are made broadband.</p>`],
+  ];
+  $("buildSteps").innerHTML = steps.map(s => `<li><div><strong>${s[0]}</strong>${s[1]}</div></li>`).join("");
+  $("bomTbl").innerHTML = `<tr><th>Item</th><th>Specification for this design</th><th>Qty</th></tr>
+    <tr><td>Film-stack wafers</td><td>${p.stack.slice(1).join(" / ")}</td><td>1 per ${Math.max(1, Math.floor(80 / (L.die.H / 1000 + 2)))} dies (100 mm wafer)</td></tr>
+    <tr><td>Writing laser</td><td>${p.writeNm} nm, ≥ 1 W CW (crystallize) + ns-pulsed (erase)</td><td>1</td></tr>
+    <tr><td>Programmable plate</td><td>${D.process.plate === "dmd" ? "DMD 2560×1600 class (e.g. TI DLP9000 family)" : "Phase-only LCoS SLM, 4K class, 3.74 µm pitch (e.g. Holoeye GAEA-2 class)"}</td><td>1</td></tr>
+    <tr><td>Projection optics</td><td>4f relay + objective, NA ≥ ${fmt(D.process.projNA, 2)}, field ≥ ${fmt(plan.tw / 1000, 1)} mm</td><td>1</td></tr>
+    <tr><td>Stage</td><td>XY air-bearing, ≥ ${fmt(L.die.W / 1000 + 10, 0)} mm travel, interferometric encoders, autofocus</td><td>1</td></tr>
+    <tr><td>Readout laser</td><td>1550 nm, linewidth ≤ 100 kHz, ${fmt(D.system.laserPerCore_mW * D.cores.length * 2, 0)} mW (signal + LO)</td><td>1</td></tr>
+    <tr><td>Modulator array</td><td>${D.N * D.cores.length} amplitude/sign modulators, ${D.system.symbolRate_GHz} GBd (thin-film LiNbO₃)</td><td>${D.N * D.cores.length}</td></tr>
+    <tr><td>Coherent receivers</td><td>Balanced PD + TIA, ${D.system.symbolRate_GHz / 2} GHz bandwidth</td><td>${D.N * D.cores.length}</td></tr>
+    <tr><td>Converters + host</td><td>${D.system.dacBits}-bit DACs, ${D.system.adcBits}-bit ADCs at ${D.system.symbolRate_GHz} GS/s, FPGA with high-speed transceivers</td><td>${D.N * D.cores.length} each</td></tr>
+    <tr><td>Fiber arrays + TEC package</td><td>${D.N * D.cores.length}-ch, 127 µm pitch, PM; TEC ±0.05 °C</td><td>2 + 1</td></tr>`;
+}
+
+// ---------- export ----------
+function download(name, data, type) { try { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); $("expMsg").firstChild.textContent = `Started download of ${name}. If nothing happened, this viewer blocks downloads. `; } catch (e) { $("expMsg").firstChild.textContent = "Downloads are blocked here. "; } }
+const deflate = async u => { const cs = new CompressionStream("deflate"), w = cs.writable.getWriter(); w.write(u); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); };
+$("xJson").addEventListener("click", () => download(`${D.name}.json`, JSON.stringify(D, null, 2), "application/json"));
+$("xGds").addEventListener("click", () => { if (R) download(`${D.name}.gds`, OTC.gds(R.layout, D.name.replace(/\W/g, "_")), "application/octet-stream"); });
+$("xCsv").addEventListener("click", () => { if (!R) return; const rows = ["core,block,col,mode,kind,x0_um,x1_um,y_um,dose_0_255,phase_rad"].concat(R.layout.patches.map(p => [p.core, p.block, p.col, p.m, p.kind, p.x0.toFixed(3), p.x1.toFixed(3), p.y.toFixed(3), Math.round(255 * p.level), p.value.toFixed(5)].join(","))); download(`${D.name}_weights.csv`, rows.join("\n"), "text/csv"); });
+$("xDmd").addEventListener("click", async () => { if (!R) return; const plan = dmdPlan(), [w, h] = plan.slmPix; const img = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th, w, h, plan.px); download(`${D.name}_dmd_r${TILE.r}_c${TILE.c}.png`, await OTC.pngGray(img, w, h, deflate), "image/png"); });
+$("xHolo").addEventListener("click", async () => { if (!HOLO) { $("expMsg").firstChild.textContent = "Compute a plate in the Plate tab first. "; return; } download(`${D.name}_fresnel_r${TILE.r}_c${TILE.c}.png`, await OTC.pngGray(HOLO.plate, HOLO.n, HOLO.n, deflate), "image/png"); });
+$("xCopy").addEventListener("click", () => { const t = JSON.stringify(D, null, 2); navigator.clipboard.writeText(t).then(() => $("expMsg").firstChild.textContent = "Design JSON copied. ", () => { const r = document.createRange(); r.selectNodeContents($("jsonView")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("expMsg").firstChild.textContent = "Clipboard blocked; the JSON below is selected, press Ctrl/Cmd+C. "; }); });
+
+// ---------- tabs ----------
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  for (const t of ["sys", "ver", "fp", "pl", "perf", "build", "exp", "notes"]) $("t-" + t).hidden = t !== b.dataset.tab;
+  if (R) ({ sys: renderSys, ver: renderVer, fp: renderFp, pl: renderTiles, perf: renderPerf, build: renderBuild })[b.dataset.tab]?.();
+}));
+window.addEventListener("resize", () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => R && renderAll(), 200); });
+fillRail(); renderSys(); compileRun();
+window.__OG = { get R() { return R; }, D };
+})();
+</script>

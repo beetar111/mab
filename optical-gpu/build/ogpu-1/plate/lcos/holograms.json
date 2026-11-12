@@ -1,0 +1,26 @@
+{
+ "size": 1024,
+ "plate_pitch_um": 3.74,
+ "lensless_distance_mm": 26.923500751879704,
+ "note": "phase 0..255 ↔ 0..2π, includes Fresnel lens term; display on a phase-only SLM or etch as a 256-level DOE",
+ "holo": [
+  {
+   "k": 0,
+   "x0_um": 4309.825773934845,
+   "y0_um": 976.8755532329104,
+   "size_px": 1024,
+   "slab_pixel_um": 0.6670137985134996,
+   "speckle_rms_single_frame": 0.058610794840433585,
+   "seconds": 6.553
+  },
+  {
+   "k": 1,
+   "x0_um": 33519.67845708515,
+   "y0_um": 976.8755532329104,
+   "size_px": 1024,
+   "slab_pixel_um": 0.6670137985134996,
+   "speckle_rms_single_frame": 0.06157979582575437,
+   "seconds": 5.848
+  }
+ ]
+}
