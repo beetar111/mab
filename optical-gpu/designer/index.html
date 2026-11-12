@@ -217,9 +217,9 @@ pre.code { font-family: var(--f-mono); font-size: 12px; background: var(--bg); b
         <div class="card">
           <h2>Export</h2>
           <div style="display:flex;flex-wrap:wrap;gap:8px">
-            <button id="xJson">Design file (.json)</button><button id="xGds">Layout (.gds)</button><button id="xCsv">Weight program (.csv)</button><button id="xDmd">Selected DMD frame (.png)</button><button id="xHolo">Selected Fresnel plate (.png)</button><button id="xCopy">Copy design JSON</button>
+            <button id="xJson">Design file (.json)</button><button id="xGds">Layout (.gds in .zip)</button><button id="xCsv">Weight program (.csv)</button><button id="xDmd">Selected DMD frame (.png)</button><button id="xHolo">Selected Fresnel plate (.png)</button><button id="xCopy">Copy design JSON</button>
           </div>
-          <div class="cap" id="expMsg">Downloads work when this page is opened from the repository (<code>optical-gpu/designer/index.html</code>). The Claude viewer blocks downloads, so use "Copy design JSON" there or run the command-line compiler, which writes every file:</div>
+          <div class="cap" id="expMsg">Each button saves one file (the Claude viewer asks you to confirm). For every file at once, including all exposure frames, run the command-line compiler:</div>
           <pre class="code">cd optical-gpu
 node tools/run.js designs/ogpu-1.json build/ogpu-1 --all-tiles</pre>
         </div>
@@ -1020,6 +1020,7 @@ OTC.fresnelPlate = function (phase, n, levels = 256) {
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 function crc32(buf) { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
 // gray8 PNG; deflate(Uint8Array) must return zlib-wrapped data (Node: zlib.deflateSync; browser: CompressionStream("deflate"))
+OTC.crc32 = crc32;
 OTC.pngGray = async function (gray, w, h, deflate) {
   const raw = new Uint8Array((w + 1) * h); for (let y = 0; y < h; y++) { raw[y * (w + 1)] = 0; raw.set(gray.subarray(y * w, (y + 1) * w), y * (w + 1) + 1); }
   const z = await deflate(raw);
@@ -1413,10 +1414,33 @@ function renderBuild() {
 }
 
 // ---------- export ----------
-function download(name, data, type) { try { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); $("expMsg").firstChild.textContent = `Started download of ${name}. If nothing happened, this viewer blocks downloads. `; } catch (e) { $("expMsg").firstChild.textContent = "Downloads are blocked here. "; } }
+let DL = null; (async () => { try { DL = window.claude && window.claude.use ? await window.claude.use("downloads") : null; } catch (e) { DL = null; } })();
+const msg = t => { $("expMsg").firstChild.textContent = t + " "; };
+async function download(name, data, type) {
+  if (DL) {   // Claude viewer: the platform asks the viewer to confirm the save
+    try { await DL.save({ filename: name, data: data instanceof Uint8Array ? new Blob([data]) : data }); msg(`Saved ${name}.`); }
+    catch (e) { msg(e && e.code === "declined" ? "Save cancelled." : `Could not save ${name} here (${e && e.code || "unavailable"}).`); }
+    return;
+  }
+  try { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); msg(`Started download of ${name}.`); }
+  catch (e) { msg("Downloads are blocked here."); }
+}
+// minimal ZIP (stored) so a .gds can travel through viewers that allow .zip but not .gds
+function zip(files) {
+  const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.name), crc = OTC.crc32(f.data), n = f.data.length;
+    const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint32(14, crc, true); h.setUint32(18, n, true); h.setUint32(22, n, true); h.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(h.buffer), nm, f.data);
+    const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint32(16, crc, true); c.setUint32(20, n, true); c.setUint32(24, n, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+    cen.push(new Uint8Array(c.buffer), nm); off += 30 + nm.length + n;
+  }
+  const cs = cen.reduce((a, p) => a + p.length, 0), e = new DataView(new ArrayBuffer(22)); e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cs, true); e.setUint32(16, off, true);
+  const all = parts.concat(cen, [new Uint8Array(e.buffer)]), out = new Uint8Array(all.reduce((a, p) => a + p.length, 0)); let o = 0; for (const p of all) { out.set(p, o); o += p.length; } return out;
+}
 const deflate = async u => { const cs = new CompressionStream("deflate"), w = cs.writable.getWriter(); w.write(u); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); };
 $("xJson").addEventListener("click", () => download(`${D.name}.json`, JSON.stringify(D, null, 2), "application/json"));
-$("xGds").addEventListener("click", () => { if (R) download(`${D.name}.gds`, OTC.gds(R.layout, D.name.replace(/\W/g, "_")), "application/octet-stream"); });
+$("xGds").addEventListener("click", () => { if (!R) return; const g = OTC.gds(R.layout, D.name.replace(/\W/g, "_")); download(`${D.name}_layout.zip`, zip([{ name: `${D.name}.gds`, data: g }, { name: "README.txt", data: new TextEncoder().encode(`GDSII layout of ${D.name}, 1 nm grid.\nLayer 1 waveguides (datatype = write dose 0-255), 2 weight patches (datatype = dose), 3 facet converters/terminators, 10 fiducials, 63 die outline.\n`) }]), "application/zip"); });
 $("xCsv").addEventListener("click", () => { if (!R) return; const rows = ["core,block,col,mode,kind,x0_um,x1_um,y_um,dose_0_255,phase_rad"].concat(R.layout.patches.map(p => [p.core, p.block, p.col, p.m, p.kind, p.x0.toFixed(3), p.x1.toFixed(3), p.y.toFixed(3), Math.round(255 * p.level), p.value.toFixed(5)].join(","))); download(`${D.name}_weights.csv`, rows.join("\n"), "text/csv"); });
 $("xDmd").addEventListener("click", async () => { if (!R) return; const plan = dmdPlan(), [w, h] = plan.slmPix; const img = OTC.raster(R.layout, TILE.c * plan.tw, TILE.r * plan.th, w, h, plan.px); download(`${D.name}_dmd_r${TILE.r}_c${TILE.c}.png`, await OTC.pngGray(img, w, h, deflate), "image/png"); });
 $("xHolo").addEventListener("click", async () => { if (!HOLO) { $("expMsg").firstChild.textContent = "Compute a plate in the Plate tab first. "; return; } download(`${D.name}_fresnel_r${TILE.r}_c${TILE.c}.png`, await OTC.pngGray(HOLO.plate, HOLO.n, HOLO.n, deflate), "image/png"); });
